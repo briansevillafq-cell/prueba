@@ -22,6 +22,11 @@ def obtener_tiempo():
         except ValueError:
             pass
 
+def esta_en_rango(temp_actual, temp_objetivo, tolerancia=2.0):
+    if temp_actual is None:
+        return False
+    return (temp_objetivo - tolerancia) <= temp_actual <= (temp_objetivo + tolerancia)
+
 async def leer_temperatura(parrilla):
     try:
         info = await parrilla.get()
@@ -30,19 +35,16 @@ async def leer_temperatura(parrilla):
         return None
 
 async def esperar_hasta_rango(parrilla, temperatura):
-    print("\nEsperando a llegar a la temperatura")
-    en_rango = False
-    temp_actual = 0.0
-    while not en_rango:
+    print("\nEsperando a llegar a la temperatura...")
+    while True:
         temp_actual = await leer_temperatura(parrilla)
         if temp_actual is not None:
-            if (temperatura - 2.0) <= temp_actual <= (temperatura + 2.0):
+            if esta_en_rango(temp_actual, temperatura):
                 print(f"\nTemperatura alcanzada: {temp_actual:.1f} C.")
-                en_rango = True
+                return temp_actual
             else:
-                print(f"Calentando | Temp actual: {temp_actual:.1f} C |)
-        await asyncio.sleep(10)
-    return temp_actual
+                print(f"Calentando | Temp actual: {temp_actual:.1f} C | Objetivo: {temperatura:.1f} C")
+        await asyncio.sleep(5)
 
 async def mantener_temperatura(parrilla, temperatura, tiempo_minutos):
     tiempo_total_segundos = tiempo_minutos * 60
@@ -50,21 +52,21 @@ async def mantener_temperatura(parrilla, temperatura, tiempo_minutos):
     loop = asyncio.get_running_loop()
     ultima_medicion = loop.time()
 
-    print(f"\nIniciando tiempo de {tiempo_minutos:.2f} minutos.")
+    print(f"\nIniciando temporizador de {tiempo_minutos:.2f} minutos.")
 
     while tiempo_restante > 0:
         temp_actual = await leer_temperatura(parrilla)
 
-        if temp_actual is not None and not ((temperatura - 2.0) <= temp_actual <= (temperatura + 2.0)):
+        if temp_actual is not None and not esta_en_rango(temp_actual, temperatura):
             print(f"\nTemperatura fuera del rango: {temp_actual:.1f} C.")
-            print("Recuperando temperatura")
+            print("Recuperando temperatura. Este tiempo no sera descontado.")
 
             await parrilla.set(equipment="heater", setpoint=temperatura)
             await parrilla.control(equipment="heater", on=True)
 
             await esperar_hasta_rango(parrilla, temperatura)
             ultima_medicion = loop.time()
-            print("Continuando el temporizador.\n")
+            print("Temperatura recuperada. Continuando el temporizador.\n")
             continue
 
         momento_actual = loop.time()
@@ -93,6 +95,7 @@ async def mantener_temperatura(parrilla, temperatura, tiempo_minutos):
         if tiempo_restante > 0:
             tiempo_espera = min(5, tiempo_restante)
             await asyncio.sleep(tiempo_espera)
+
 async def apagar_equipo(parrilla):
     print("\nApagando equipo...")
     try:
@@ -101,7 +104,6 @@ async def apagar_equipo(parrilla):
         print("Equipo apagado correctamente.")
     except Exception as e:
         print(f"Error al apagar el equipo: {e}")
-
 
 async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
     parrilla = Shaker(address=puerto)
@@ -129,7 +131,6 @@ async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
     finally:
         await apagar_equipo(parrilla)
 
-
 def iniciar_proceso():
     try:
         temperatura = obtener_temperatura()
@@ -145,10 +146,9 @@ def iniciar_proceso():
         print("\nProceso terminado con exito.")
 
     except KeyboardInterrupt:
-        print("\nPrograma detenido manualmente. Salida segura realizada.")
+        print("\nPrograma detenido manualmente.")
     except Exception as e:
         print(f"\nNo se pudo completar el proceso: {e}")
-
 
 if __name__ == "__main__":
     iniciar_proceso()

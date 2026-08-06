@@ -1,14 +1,12 @@
 import asyncio
 from ika.driver import Shaker
 
-
 def obtener_temperatura():
     while True:
         try:
             return float(input("Ingrese la temperatura deseada en C (0 a 400): "))
         except ValueError:
             pass
-
 
 def obtener_rpm():
     while True:
@@ -17,7 +15,6 @@ def obtener_rpm():
         except ValueError:
             pass
 
-
 def obtener_tiempo():
     while True:
         try:
@@ -25,25 +22,25 @@ def obtener_tiempo():
         except ValueError:
             pass
 
-
 def esta_en_rango(temp_actual, temp_objetivo, tolerancia=5.0):
     if temp_actual is None:
         return False
     return (temp_objetivo - tolerancia) <= temp_actual <= (temp_objetivo + tolerancia)
 
-
 async def leer_temperatura(parrilla):
     try:
-        info = await parrilla.get()
-        if isinstance(info, dict) and "temp" in info:
-            if isinstance(info["temp"], dict) and "actual" in info["temp"]:
-                return float(info["temp"]["actual"])
-            return float(info["temp"])
+        info = await parrilla.get(equipment="heater")
+        if isinstance(info, dict):
+            if "actual" in info:
+                return float(info["actual"])
+            if "temp" in info:
+                if isinstance(info["temp"], dict) and "actual" in info["temp"]:
+                    return float(info["temp"]["actual"])
+                return float(info["temp"])
         return float(info)
     except Exception as e:
-        print(f"Error en lectura de sensor: {e}")
+        print(f"Error de lectura [{type(e).__name__}]: {e if str(e) else repr(e)}")
         return None
-
 
 async def esperar_hasta_rango(parrilla, temperatura, tolerancia=5.0):
     print("\nEsperando a llegar a la temperatura...")
@@ -55,9 +52,8 @@ async def esperar_hasta_rango(parrilla, temperatura, tolerancia=5.0):
                 print(f"\nTemperatura en rango alcanzada: {temp_actual:.1f} C. Iniciando temporizador...")
                 return temp_actual
         else:
-            print("Intentando conectar con el sensor de la parrilla...")
+            print("Intentando obtener lectura del sensor...")
         await asyncio.sleep(3)
-
 
 async def mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia=5.0):
     tiempo_total_segundos = tiempo_minutos * 60
@@ -109,7 +105,6 @@ async def mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia
             tiempo_espera = min(5, tiempo_restante)
             await asyncio.sleep(tiempo_espera)
 
-
 async def apagar_equipo(parrilla):
     print("\nApagando equipo...")
     try:
@@ -118,7 +113,6 @@ async def apagar_equipo(parrilla):
         print("Equipo apagado correctamente.")
     except Exception as e:
         print(f"Error al apagar el equipo: {e}")
-
 
 async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
     parrilla = Shaker(address=puerto)
@@ -146,7 +140,6 @@ async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
     finally:
         await apagar_equipo(parrilla)
 
-
 def iniciar_proceso():
     try:
         temperatura = obtener_temperatura()
@@ -165,7 +158,6 @@ def iniciar_proceso():
         print("\nPrograma detenido manualmente. Salida segura realizada.")
     except Exception as e:
         print(f"\nNo se pudo completar el proceso: {e}")
-
 
 if __name__ == "__main__":
     iniciar_proceso()

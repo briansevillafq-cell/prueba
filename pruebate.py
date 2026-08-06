@@ -1,6 +1,7 @@
 import asyncio
 from ika.driver import Shaker
 
+
 def obtener_temperatura():
     while True:
         try:
@@ -27,20 +28,20 @@ def esta_en_rango(temp_actual, temp_objetivo, tolerancia=5.0):
         return False
     return (temp_objetivo - tolerancia) <= temp_actual <= (temp_objetivo + tolerancia)
 
+
 async def leer_temperatura(parrilla):
     try:
-        info = await parrilla.get(equipment="heater")
-        if isinstance(info, dict):
-            if "actual" in info:
-                return float(info["actual"])
-            if "temp" in info:
-                if isinstance(info["temp"], dict) and "actual" in info["temp"]:
-                    return float(info["temp"]["actual"])
-                return float(info["temp"])
-        return float(info)
+        info = await parrilla.get()
+        valor_raw = info.get("temp", {}).get("actual")
+        if valor_raw is not None:
+            if isinstance(valor_raw, (int, float)):
+                return float(valor_raw)
+            if isinstance(valor_raw, str):
+                limpio = "".join(c for c in valor_raw if c.isdigit() or c in ".-")
+                return float(limpio)
     except Exception as e:
-        print(f"Error de lectura [{type(e).__name__}]: {e if str(e) else repr(e)}")
-        return None
+        print(f"Error de lectura [{type(e).__name__}]: {repr(e)}")
+    return None
 
 async def esperar_hasta_rango(parrilla, temperatura, tolerancia=5.0):
     print("\nEsperando a llegar a la temperatura...")
@@ -122,6 +123,7 @@ async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
         await parrilla.set(equipment="heater", setpoint=temperatura)
         await parrilla.control(equipment="shaker", on=True)
         await parrilla.control(equipment="heater", on=True)
+        await asyncio.sleep(1.0)
 
         print(f"Agitacion iniciada a {rpm:.0f} RPM.")
         print(f"Calentando hasta {temperatura:.1f} +/- 5.0 C.")
@@ -158,6 +160,7 @@ def iniciar_proceso():
         print("\nPrograma detenido manualmente. Salida segura realizada.")
     except Exception as e:
         print(f"\nNo se pudo completar el proceso: {e}")
+
 
 if __name__ == "__main__":
     iniciar_proceso()

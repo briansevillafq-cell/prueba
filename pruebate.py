@@ -9,6 +9,7 @@ def obtener_temperatura():
         except ValueError:
             pass
 
+
 def obtener_rpm():
     while True:
         try:
@@ -16,12 +17,14 @@ def obtener_rpm():
         except ValueError:
             pass
 
+
 def obtener_tiempo():
     while True:
         try:
             return float(input("Ingrese el tiempo de mantenimiento en minutos: "))
         except ValueError:
             pass
+
 
 def esta_en_rango(temp_actual, temp_objetivo, tolerancia=5.0):
     if temp_actual is None:
@@ -31,17 +34,26 @@ def esta_en_rango(temp_actual, temp_objetivo, tolerancia=5.0):
 
 async def leer_temperatura(parrilla):
     try:
-        info = await parrilla.get()
-        valor_raw = info.get("temp", {}).get("actual")
-        if valor_raw is not None:
-            if isinstance(valor_raw, (int, float)):
-                return float(valor_raw)
-            if isinstance(valor_raw, str):
-                limpio = "".join(c for c in valor_raw if c.isdigit() or c in ".-")
-                return float(limpio)
+        if hasattr(parrilla, "READ_ACTUAL_TEMPERATURE"):
+            val = await parrilla.query(parrilla.READ_ACTUAL_TEMPERATURE)
+            if val is not None:
+                return float(val)
+    except NotImplementedError:
+        print("Aviso: El comando READ_ACTUAL_TEMPERATURE no esta implementado en el driver.")
+        return None
     except Exception as e:
-        print(f"Error de lectura [{type(e).__name__}]: {repr(e)}")
+        print(f"Error de lectura directa [{type(e).__name__}]: {repr(e)}")
+
+    try:
+        info = await parrilla.get()
+        val = info.get("temp", {}).get("actual")
+        if val is not None:
+            return float(val)
+    except Exception as e:
+        print(f"Error de lectura get [{type(e).__name__}]: {repr(e)}")
+
     return None
+
 
 async def esperar_hasta_rango(parrilla, temperatura, tolerancia=5.0):
     print("\nEsperando a llegar a la temperatura...")
@@ -55,6 +67,7 @@ async def esperar_hasta_rango(parrilla, temperatura, tolerancia=5.0):
         else:
             print("Intentando obtener lectura del sensor...")
         await asyncio.sleep(3)
+
 
 async def mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia=5.0):
     tiempo_total_segundos = tiempo_minutos * 60
@@ -106,6 +119,7 @@ async def mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia
             tiempo_espera = min(5, tiempo_restante)
             await asyncio.sleep(tiempo_espera)
 
+
 async def apagar_equipo(parrilla):
     print("\nApagando equipo...")
     try:
@@ -114,6 +128,7 @@ async def apagar_equipo(parrilla):
         print("Equipo apagado correctamente.")
     except Exception as e:
         print(f"Error al apagar el equipo: {e}")
+
 
 async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
     parrilla = Shaker(address=puerto)
@@ -141,6 +156,7 @@ async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
         raise
     finally:
         await apagar_equipo(parrilla)
+
 
 def iniciar_proceso():
     try:

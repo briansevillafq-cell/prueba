@@ -1,0 +1,154 @@
+import asyncio
+from ika.driver import Shaker
+
+def obtener_temperatura():
+    while True:
+        try:
+            return float(input("Ingrese la temperatura deseada en C (0 a 400): "))
+        except ValueError:
+            pass
+
+def obtener_rpm():
+    while True:
+        try:
+            return float(input("Ingrese la velocidad de agitacion en RPM (300 a 3000): "))
+        except ValueError:
+            pass
+
+def obtener_tiempo():
+    while True:
+        try:
+            return float(input("Ingrese el tiempo de mantenimiento en minutos: "))
+        except ValueError:
+            pass
+
+async def leer_temperatura(parrilla):
+    try:
+        info = await parrilla.get()
+        return float(info["temp"]["actual"])
+    except Exception:
+        return None
+
+async def esperar_hasta_rango(parrilla, temperatura):
+    print("\nEsperando a llegar a la temperatura")
+    en_rango = False
+    temp_actual = 0.0
+    while not en_rango:
+        temp_actual = await leer_temperatura(parrilla)
+        if temp_actual is not None:
+            if (temperatura - 2.0) <= temp_actual <= (temperatura + 2.0):
+                print(f"\nTemperatura alcanzada: {temp_actual:.1f} C.")
+                en_rango = True
+            else:
+                print(f"Calentando | Temp actual: {temp_actual:.1f} C |)
+        await asyncio.sleep(10)
+    return temp_actual
+
+async def mantener_temperatura(parrilla, temperatura, tiempo_minutos):
+    tiempo_total_segundos = tiempo_minutos * 60
+    tiempo_restante = tiempo_total_segundos
+    loop = asyncio.get_running_loop()
+    ultima_medicion = loop.time()
+
+    print(f"\nIniciando tiempo de {tiempo_minutos:.2f} minutos.")
+
+    while tiempo_restante > 0:
+        temp_actual = await leer_temperatura(parrilla)
+
+        if temp_actual is not None and not ((temperatura - 2.0) <= temp_actual <= (temperatura + 2.0)):
+            print(f"\nTemperatura fuera del rango: {temp_actual:.1f} C.")
+            print("Recuperando temperatura")
+
+            await parrilla.set(equipment="heater", setpoint=temperatura)
+            await parrilla.control(equipment="heater", on=True)
+
+            await esperar_hasta_rango(parrilla, temperatura)
+            ultima_medicion = loop.time()
+            print("Continuando el temporizador.\n")
+            continue
+
+        momento_actual = loop.time()
+        tiempo_transcurrido = momento_actual - ultima_medicion
+        tiempo_restante -= tiempo_transcurrido
+        ultima_medicion = momento_actual
+
+        if tiempo_restante < 0:
+            tiempo_restante = 0
+
+        segundos_totales = int(tiempo_restante)
+        if tiempo_restante > segundos_totales:
+            segundos_totales += 1
+
+        minutos_restantes = segundos_totales // 60
+        segundos_restantes = segundos_totales % 60
+        tiempo_transcurrido_valido = tiempo_total_segundos - tiempo_restante
+
+        temp_mostrar = temp_actual if temp_actual is not None else 0.0
+        print(
+            f"Tiempo restante: {minutos_restantes:02d}:{segundos_restantes:02d} | "
+            f"Tiempo transcurrido: {int(tiempo_transcurrido_valido)} s | "
+            f"Temp actual: {temp_mostrar:.1f} C"
+        )
+
+        if tiempo_restante > 0:
+            tiempo_espera = min(5, tiempo_restante)
+            await asyncio.sleep(tiempo_espera)
+async def apagar_equipo(parrilla):
+    print("\nApagando equipo...")
+    try:
+        await parrilla.control(equipment="heater", on=False)
+        await parrilla.control(equipment="shaker", on=False)
+        print("Equipo apagado correctamente.")
+    except Exception as e:
+        print(f"Error al apagar el equipo: {e}")
+
+
+async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
+    parrilla = Shaker(address=puerto)
+    try:
+        print("\nConfigurando equipo...")
+        await parrilla.set(equipment="shaker", setpoint=rpm)
+        await parrilla.set(equipment="heater", setpoint=temperatura)
+        await parrilla.control(equipment="shaker", on=True)
+        await parrilla.control(equipment="heater", on=True)
+
+        print(f"Agitacion iniciada a {rpm:.0f} RPM.")
+        print(f"Calentando hasta {temperatura:.1f} +/- 2.0 C.")
+
+        await esperar_hasta_rango(parrilla, temperatura)
+        await mantener_temperatura(parrilla, temperatura, tiempo_minutos)
+
+        print("\nTiempo de mantenimiento finalizado.")
+
+    except asyncio.CancelledError:
+        print("\nInterrupcion detectada. Iniciando apagado de seguridad...")
+        raise
+    except Exception as e:
+        print(f"\nError durante el proceso: {e}")
+        raise
+    finally:
+        await apagar_equipo(parrilla)
+
+
+def iniciar_proceso():
+    try:
+        temperatura = obtener_temperatura()
+        rpm = obtener_rpm()
+        tiempo = obtener_tiempo()
+
+        print("\nResumen:")
+        print(f"Temperatura: {temperatura:.1f} +/- 2.0 C")
+        print(f"Agitacion: {rpm:.0f} RPM")
+        print(f"Tiempo efectivo: {tiempo:.2f} minutos")
+
+        asyncio.run(ejecutar_parrilla("/dev/ttyUSB0", temperatura, rpm, tiempo))
+        print("\nProceso terminado con exito.")
+
+    except KeyboardInterrupt:
+        print("\nPrograma detenido manualmente. Salida segura realizada.")
+    except Exception as e:
+        print(f"\nNo se pudo completar el proceso: {e}")
+
+
+if __name__ == "__main__":
+    iniciar_proceso()

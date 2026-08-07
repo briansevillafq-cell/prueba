@@ -31,6 +31,12 @@ def obtener_tiempo():
             pass
 
 
+def esta_en_rango(temp_actual, temp_objetivo, tolerancia=3.0):
+    if temp_actual is None:
+        return False
+    return (temp_objetivo - tolerancia) <= temp_actual <= (temp_objetivo + tolerancia)
+
+
 async def leer_temperatura(parrilla):
     try:
         res_placa = await parrilla.query("IN_PV_2")
@@ -100,21 +106,7 @@ async def esperar_hasta_rango(parrilla, temperatura_final, tolerancia=3.0):
     global texto_overlay
     texto_overlay = ""  # Oculta el mensaje en la camara mientras calienta
 
-    temp_inicial = await leer_temperatura(parrilla)
-
-    if temp_inicial is not None and abs(temperatura_final - temp_inicial) <= 5.0:
-        margen_rampa = 1.0
-    elif temperatura_final > 150:
-        margen_rampa = 10.0
-    elif temperatura_final > 80:
-        margen_rampa = 6.0
-    else:
-        margen_rampa = 3.0
-
-    print(
-        f"\nIniciando calentamiento suave hacia {temperatura_final:.1f} C "
-        f"(Margen rampa adaptable: +{margen_rampa:.1f} C)..."
-    )
+    print(f"\nIniciando calentamiento controlado hacia {temperatura_final:.1f} C...")
 
     while True:
         temp_actual = await leer_temperatura(parrilla)
@@ -131,31 +123,25 @@ async def esperar_hasta_rango(parrilla, temperatura_final, tolerancia=3.0):
                 await asyncio.sleep(4)
                 continue
 
-            # Reasegurar encendido si habia sido apagado por proteccion
             await parrilla.control(equipment="heater", on=True)
 
-            # 2. CONTROL DE RAMPA
-            if temp_actual >= (temperatura_final - margen_rampa):
-                await parrilla.set(equipment="heater", setpoint=temperatura_final)
-                print(
-                    f"Tramo final | Temp actual: {temp_actual:.1f} C | "
-                    f"Setpoint final: {temperatura_final:.1f} C"
-                )
+            # 2. RAMPA FINA ESTRICTA: Setpoint maximo a +1.0 C sobre la temperatura real
+            # Esto impide que el PID interno de IKA active el 100% de potencia
+            setpoint_dinamico = min(temp_actual + 1.0, temperatura_final)
+            await parrilla.set(equipment="heater", setpoint=setpoint_dinamico)
 
-                # 3. CONDICION DE INICIO: Inicia SOLO cuando alcanza o supera la temperatura deseada
-                if temp_actual >= temperatura_final:
-                    print(
-                        f"\nTemperatura objetivo alcanzada/superada: {temp_actual:.1f} C. "
-                        f"INICIANDO CRONOMETRO."
-                    )
-                    return temp_actual
-            else:
-                setpoint_dinamico = temp_actual + margen_rampa
-                await parrilla.set(equipment="heater", setpoint=setpoint_dinamico)
+            print(
+                f"Rampa activa | Temp actual: {temp_actual:.1f} C | "
+                f"Setpoint enviado: {setpoint_dinamico:.1f} C"
+            )
+
+            # 3. CONDICION DE INICIO: Inicia SOLO cuando alcanza o supera la temperatura deseada
+            if temp_actual >= temperatura_final:
                 print(
-                    f"Rampa activa | Temp actual: {temp_actual:.1f} C | "
-                    f"Setpoint dinamico: {setpoint_dinamico:.1f} C"
+                    f"\nTemperatura objetivo alcanzada/superada: {temp_actual:.1f} C. "
+                    f"INICIANDO CRONOMETRO."
                 )
+                return temp_actual
         else:
             print("Intentando obtener lectura del sensor...")
         await asyncio.sleep(4)
@@ -187,7 +173,7 @@ async def mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia
                 print("Temperatura recuperada.\n")
                 continue
 
-            # Verificacion de tolerancia inferior/superior aceptable para mantener cronometro
+            # Verificacion de tolerancia inferior para mantener cronometro
             if temp_actual < (temperatura - tolerancia):
                 texto_overlay = ""
                 print(f"\nTemperatura cayo por debajo del rango: {temp_actual:.1f} C.")
@@ -268,19 +254,7 @@ async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
         await asyncio.sleep(0.3)
 
         temp_inicial = await leer_temperatura(parrilla)
-
-        if temp_inicial is not None and abs(temperatura - temp_inicial) <= 5.0:
-            margen_inicial = 1.0
-        elif temperatura > 150:
-            margen_inicial = 10.0
-        elif temperatura > 80:
-            margen_inicial = 6.0
-        else:
-            margen_inicial = 3.0
-
-        sp_inicio = (temp_inicial + margen_inicial) if temp_inicial else 25.0
-        if sp_inicio > temperatura:
-            sp_inicio = temperatura
+        sp_inicio = min((temp_inicial + 1.0), temperatura) if temp_inicial else 25.0
 
         await parrilla.set(equipment="heater", setpoint=sp_inicio)
         await asyncio.sleep(0.3)
@@ -288,7 +262,7 @@ async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
         await asyncio.sleep(0.5)
 
         print(f"Agitacion iniciada a {rpm:.0f} RPM.")
-        print(f"Iniciando control dinamico de temperatura hacia {temperatura:.1f} C.")
+        print(f"Iniciando control dinamico fino hacia {temperatura:.1f} C.")
 
         await esperar_hasta_rango(parrilla, temperatura, tolerancia=3.0)
         await mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia=3.0)

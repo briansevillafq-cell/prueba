@@ -63,9 +63,6 @@ async def esperar_hasta_rango(parrilla, temperatura, tolerancia=5.0):
             if esta_en_rango(temp_actual, temperatura, tolerancia):
                 print(f"\nTemperatura en rango alcanzada: {temp_actual:.1f} C. Iniciando temporizador...")
                 return temp_actual
-            else:
-                await parrilla.set(equipment="heater", setpoint=temperatura)
-                await parrilla.control(equipment="heater", on=True)
         else:
             print("Intentando obtener lectura del sensor...")
         await asyncio.sleep(3)
@@ -85,10 +82,6 @@ async def mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia
         if temp_actual is not None and not esta_en_rango(temp_actual, temperatura, tolerancia):
             print(f"\nTemperatura fuera del rango: {temp_actual:.1f} C.")
             print("Recuperando temperatura. Este tiempo no sera descontado.")
-
-            await parrilla.set(equipment="heater", setpoint=temperatura)
-            await parrilla.control(equipment="heater", on=True)
-
             await esperar_hasta_rango(parrilla, temperatura, tolerancia)
             ultima_medicion = loop.time()
             print("Temperatura recuperada. Continuando el temporizador.\n")
@@ -138,11 +131,22 @@ async def apagar_equipo(parrilla):
 async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
     parrilla = Shaker(address=puerto)
     try:
-        print("\nConfigurando equipo...")
+        print("\nLimpiando estado del equipo...")
+        try:
+            await parrilla.control(equipment="heater", on=False)
+            await parrilla.control(equipment="shaker", on=False)
+            await asyncio.sleep(1.0)
+        except Exception:
+            pass
+
+        print("Configurando equipo...")
         await parrilla.set(equipment="shaker", setpoint=rpm)
+        await asyncio.sleep(0.5)
         await parrilla.set(equipment="heater", setpoint=temperatura)
         await asyncio.sleep(0.5)
+
         await parrilla.control(equipment="shaker", on=True)
+        await asyncio.sleep(0.5)
         await parrilla.control(equipment="heater", on=True)
         await asyncio.sleep(1.0)
 

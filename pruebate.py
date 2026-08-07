@@ -1,6 +1,10 @@
 import asyncio
+import cv2
 from ika.driver import Shaker
 
+# Variable global compartida para el texto sobre el video
+texto_overlay = ""
+camara_activa = True
 
 def obtener_temperatura():
     while True:
@@ -9,14 +13,12 @@ def obtener_temperatura():
         except ValueError:
             pass
 
-
 def obtener_rpm():
     while True:
         try:
             return float(input("Ingrese la velocidad de agitacion en RPM (300 a 3000): "))
         except ValueError:
             pass
-
 
 def obtener_tiempo():
     while True:
@@ -25,57 +27,120 @@ def obtener_tiempo():
         except ValueError:
             pass
 
-
-def esta_en_rango(temp_actual, temp_objetivo, tolerancia=5.0):
+def esta_en_rango(temp_actual, temp_objetivo, tolerancia=3.0):
     if temp_actual is None:
         return False
     return (temp_objetivo - tolerancia) <= temp_actual <= (temp_objetivo + tolerancia)
 
-
-# LIMPIA EL VALOR DE LA SENAL
-def limpiar_valor(cadena):
-    if cadena is None:
-        return None
-    if isinstance(cadena, (int, float)):
-        return float(cadena)
-    try:
-        partes = str(cadena).strip().split()
-        if partes:
-            # NUMEROS, DECIMALES, NEGATIVOS
-            limpio = "".join(c for c in partes[0] if c.isdigit() or c in ".-")
-            if limpio:
-                return float(limpio)
-    except Exception:
-        pass
-    return None
-
-
 async def leer_temperatura(parrilla):
     try:
         res_placa = await parrilla.query("IN_PV_2")
-        val_placa = limpiar_valor(res_placa)
-        if val_placa is not None and val_placa >= 0:
-            return val_placa
+        if res_placa is not None:
+            val_placa = float(res_placa)
+            if val_placa >= 0:
+                return val_placa
     except Exception:
         pass
     return None
 
+async def bucle_camara():
+    global texto_overlay, camara_activa
 
-async def esperar_hasta_rango(parrilla, temperatura, tolerancia=5.0):
-    print("\nEsperando a llegar a la temperatura...")
+    # Configuracion de la camara USB V4L2 a 720p MJPEG
+    cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+    cap.set(cv2.CAP_PROP_FPS, 30)
+
+    if not cap.isOpened():
+        print("Error: No se pudo abrir la camara /dev/video0")
+        return
+
+    print("Camara iniciada a 720p MJPEG @ 30 FPS en pantalla.")
+
+    try:
+        while camara_activa:
+            ret, frame = cap.read()
+            if not ret:
+                await asyncio.sleep(0.01)
+                continue
+
+            # El texto SOLO se dibuja si la variable contiene un mensaje activo (en rango)
+            if texto_overlay:
+                # Cuadro de fondo oscuro semi-transparente para lecturabilidad
+                cv2.rectangle(frame, (20, 20), (550, 75), (0, 0, 0), -1)
+
+                # Texto en verde brillante
+                cv2.putText(
+                    frame,
+                    texto_overlay,
+                    (30, 58),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.9,
+                    (0, 255, 0),
+                    2,
+                    cv2.LINE_AA,
+                )
+
+            # Mostrar imagen en pantalla
+            cv2.imshow("Monitoreo de Reaccion IKA", frame)
+
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                break
+
+            await asyncio.sleep(0.001)
+    finally:
+        cap.release()
+        cv2.destroyAllWindows()
+        print("Camara cerrada correctamente.")
+
+async def esperar_hasta_rango(parrilla, temperatura_final, tolerancia=3.0):
+    global texto_overlay
+    texto_overlay = ""  # Oculta el mensaje en la camara mientras calienta o recupera
+
+    temp_inicial = await leer_temperatura(parrilla)
+
+    if temp_inicial is not None and abs(temperatura_final - temp_inicial) <= 5.0:
+        margen_rampa = 1.0
+    elif temperatura_final > 150:
+        margen_rampa = 10.0
+    elif temperatura_final > 80:
+        margen_rampa = 6.0
+    else:
+        margen_rampa = 3.0
+
+    print(
+        f"\nIniciando calentamiento suave hacia {temperatura_final:.1f} C "
+        f"(Margen rampa adaptable: +{margen_rampa:.1f} C)..."
+    )
+
     while True:
         temp_actual = await leer_temperatura(parrilla)
         if temp_actual is not None:
-            print(f"Calentando | Temp actual: {temp_actual:.1f} C")
-            if esta_en_rango(temp_actual, temperatura, tolerancia):
-                print("\nTemperatura en rango alcanzada, INICIANDO")
-                return temp_actual
+            if temp_actual >= (temperatura_final - margen_rampa):
+                await parrilla.set(equipment="heater", setpoint=temperatura_final)
+                print(
+                    f"Tramo final | Temp actual: {temp_actual:.1f} C | "
+                    f"Setpoint final: {temperatura_final:.1f} C"
+                )
+                if esta_en_rango(temp_actual, temperatura_final, tolerancia):
+                    print(f"\nTemperatura en rango alcanzada: {temp_actual:.1f} C. INICIANDO.")
+                    return temp_actual
+            else:
+                setpoint_dinamico = temp_actual + margen_rampa
+                await parrilla.set(equipment="heater", setpoint=setpoint_dinamico)
+                print(
+                    f"Rampa activa | Temp actual: {temp_actual:.1f} C | "
+                    f"Setpoint dinamico: {setpoint_dinamico:.1f} C"
+                )
         else:
-            print("Intentando obtener lectura del sensor")
-        await asyncio.sleep(3)
+            print("Intentando obtener lectura del sensor...")
+        await asyncio.sleep(4)
 
 
-async def mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia=5.0):
+async def mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia=3.0):
+    global texto_overlay
     tiempo_total_segundos = tiempo_minutos * 60
     tiempo_restante = tiempo_total_segundos
     loop = asyncio.get_running_loop()
@@ -87,9 +152,10 @@ async def mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia
         temp_actual = await leer_temperatura(parrilla)
 
         if temp_actual is not None and not esta_en_rango(temp_actual, temperatura, tolerancia):
+            texto_overlay = ""  # Oculta el mensaje si se sale de rango
             print(f"\nTemperatura fuera del rango: {temp_actual:.1f} C.")
-            print("Recuperando temperatura")
-            await esperar_hasta_rango(parrilla, temperatura, tolerancia)
+            print("Recuperando temperatura...")
+            await esperar_hasta_rango(parrilla, temperatura, tolerancia=tolerancia)
             ultima_medicion = loop.time()
             print("Temperatura recuperada.\n")
             continue
@@ -110,6 +176,9 @@ async def mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia
         segundos_restantes = segundos_totales % 60
         tiempo_transcurrido_valido = tiempo_total_segundos - tiempo_restante
 
+        # Actualiza el texto overlay para la camara SOLO cuando esta en rango
+        texto_overlay = f"Tiempo restante: {minutos_restantes:02d}:{segundos_restantes:02d}"
+
         temp_mostrar = temp_actual if temp_actual is not None else 0.0
         print(
             f"Tiempo restante: {minutos_restantes:02d}:{segundos_restantes:02d} | "
@@ -121,8 +190,16 @@ async def mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia
             tiempo_espera = min(5, tiempo_restante)
             await asyncio.sleep(tiempo_espera)
 
+    texto_overlay = "REACCION FINALIZADA"
+    await asyncio.sleep(3)
+    texto_overlay = ""
+
 
 async def apagar_equipo(parrilla):
+    global camara_activa, texto_overlay
+    texto_overlay = ""
+    camara_activa = False
+
     print("\nApagando equipo y liberando control remoto...")
     try:
         await parrilla.control(equipment="heater", on=False)
@@ -133,16 +210,6 @@ async def apagar_equipo(parrilla):
         await parrilla.control(equipment="shaker", on=False)
     except Exception as e:
         print(f"Error al apagar agitador: {e}")
-
-    try:
-        await parrilla.set(equipment="heater", setpoint=0)
-    except Exception as e:
-        print(f"Error al restablecer setpoint calentador: {e}")
-
-    try:
-        await parrilla.set(equipment="shaker", setpoint=0)
-    except Exception as e:
-        print(f"Error al restablecer setpoint agitador: {e}")
 
     print("Equipo apagado correctamente.")
 
@@ -158,31 +225,52 @@ async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
         except Exception:
             pass
 
-        print("Configurando equipo")
+        print("Configurando agitacion inicial...")
         await parrilla.set(equipment="shaker", setpoint=rpm)
         await asyncio.sleep(0.3)
-        await parrilla.set(equipment="heater", setpoint=temperatura)
+        await parrilla.control(equipment="shaker", on=True)
         await asyncio.sleep(0.3)
 
-        await parrilla.control(equipment="shaker", on=True)
+        temp_inicial = await leer_temperatura(parrilla)
+
+        if temp_inicial is not None and abs(temperatura - temp_inicial) <= 5.0:
+            margen_inicial = 1.0
+        elif temperatura > 150:
+            margen_inicial = 10.0
+        elif temperatura > 80:
+            margen_inicial = 6.0
+        else:
+            margen_inicial = 3.0
+
+        sp_inicio = (temp_inicial + margen_inicial) if temp_inicial else 25.0
+        if sp_inicio > temperatura:
+            sp_inicio = temperatura
+
+        await parrilla.set(equipment="heater", setpoint=sp_inicio)
         await asyncio.sleep(0.3)
         await parrilla.control(equipment="heater", on=True)
         await asyncio.sleep(0.5)
 
         print(f"Agitacion iniciada a {rpm:.0f} RPM.")
-        print(f"Calentando hasta {temperatura:.1f} C.")
+        print(f"Iniciando control dinamico de temperatura hacia {temperatura:.1f} C.")
 
-        await esperar_hasta_rango(parrilla, temperatura, tolerancia=5.0)
-        await mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia=5.0)
+        await esperar_hasta_rango(parrilla, temperatura, tolerancia=3.0)
+        await mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia=3.0)
 
         print("\nTiempo de reaccion finalizado.")
 
     except (asyncio.CancelledError, KeyboardInterrupt):
-        print("\nInterrupcion detectada (Ctrl+C) Iniciando apagado de emergencia...")
+        print("\nInterrupcion detectada (Ctrl+C). Iniciando apagado de emergencia...")
     except Exception as e:
         print(f"\nError durante el proceso: {e}")
     finally:
         await apagar_equipo(parrilla)
+
+
+async def programa_principal(puerto, temperatura, rpm, tiempo):
+    task_camara = asyncio.create_task(bucle_camara())
+    await ejecutar_parrilla(puerto, temperatura, rpm, tiempo)
+    await task_camara
 
 
 def iniciar_proceso():
@@ -192,11 +280,11 @@ def iniciar_proceso():
         tiempo = obtener_tiempo()
 
         print("\nResumen:")
-        print(f"Temperatura: {temperatura:.1f}")
+        print(f"Temperatura objetivo: {temperatura:.1f} C")
         print(f"Agitacion: {rpm:.0f} RPM")
         print(f"Tiempo efectivo: {tiempo:.2f} minutos")
 
-        asyncio.run(ejecutar_parrilla("/dev/ttyUSB0", temperatura, rpm, tiempo))
+        asyncio.run(programa_principal("/dev/ttyUSB0", temperatura, rpm, tiempo))
         print("\nProceso terminado.")
 
     except KeyboardInterrupt:

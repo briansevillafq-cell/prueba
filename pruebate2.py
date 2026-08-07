@@ -22,40 +22,26 @@ def obtener_tiempo():
         except ValueError:
             pass
 
-def esta_en_rango(temp_actual, temp_objetivo, tolerancia=2.0):
+
+def esta_en_rango(temp_actual, temp_objetivo, tolerancia=5.0):
     if temp_actual is None:
         return False
     return (temp_objetivo - tolerancia) <= temp_actual <= (temp_objetivo + tolerancia)
-
-def limpiar_valor(cadena):
-    if cadena is None:
-        return None
-    if isinstance(cadena, (int, float)):
-        return float(cadena)
-    try:
-        partes = str(cadena).strip().split()
-        if partes:
-            limpio = "".join(c for c in partes[0] if c.isdigit() or c in ".-")
-            if limpio:
-                return float(limpio)
-    except Exception:
-        pass
-    return None
 
 
 async def leer_temperatura(parrilla):
     try:
         res_placa = await parrilla.query("IN_PV_2")
-        val_placa = limpiar_valor(res_placa)
-        if val_placa is not None and val_placa >= 0:
-            return val_placa
+        if res_placa is not None:
+            val_placa = float(res_placa)
+            if val_placa >= 0:
+                return val_placa
     except Exception:
         pass
     return None
 
 
-async def esperar_hasta_rango(parrilla, temperatura_final, tolerancia=2.0):
-    # Seleccion automatica del margen de rampa segun la temperatura objetivo
+async def esperar_hasta_rango(parrilla, temperatura_final, tolerancia=5.0):
     if temperatura_final > 150:
         margen_rampa = 10.0
     elif temperatura_final > 80:
@@ -64,24 +50,33 @@ async def esperar_hasta_rango(parrilla, temperatura_final, tolerancia=2.0):
         margen_rampa = 3.0
 
     print(
-        f"\nIniciando calentamiento{temperatura_final:.1f} C "
+        f"\nIniciando calentamiento suave hacia {temperatura_final:.1f} C "
+        f"(Margen rampa adaptable: +{margen_rampa:.1f} C)..."
     )
 
     while True:
         temp_actual = await leer_temperatura(parrilla)
         if temp_actual is not None:
-            # Si estamos cerca del objetivo o por encima de el (enfriando)
             if temp_actual >= (temperatura_final - margen_rampa):
                 await parrilla.set(equipment="heater", setpoint=temperatura_final)
+                print(
+                    f"Tramo final | Temp actual: {temp_actual:.1f} C | "
+                    f"Setpoint final: {temperatura_final:.1f} C"
+                )
                 if esta_en_rango(temp_actual, temperatura_final, tolerancia):
                     print(f"\nTemperatura en rango alcanzada: {temp_actual:.1f} C. INICIANDO.")
                     return temp_actual
             else:
                 setpoint_dinamico = temp_actual + margen_rampa
                 await parrilla.set(equipment="heater", setpoint=setpoint_dinamico)
+                print(
+                    f"Rampa activa | Temp actual: {temp_actual:.1f} C | "
+                    f"Setpoint dinamico: {setpoint_dinamico:.1f} C"
+                )
         else:
             print("Intentando obtener lectura del sensor...")
         await asyncio.sleep(4)
+
 
 async def mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia=2.0):
     tiempo_total_segundos = tiempo_minutos * 60
@@ -162,7 +157,6 @@ async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
         await parrilla.control(equipment="shaker", on=True)
         await asyncio.sleep(0.3)
 
-        # Determina margen inicial segun la temperatura final solicitada
         if temperatura > 150:
             margen_inicial = 10.0
         elif temperatura > 80:
@@ -170,7 +164,6 @@ async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
         else:
             margen_inicial = 3.0
 
-        # Encendemos el calentador con un setpoint dinamico inicial para arrancar la rampa
         temp_inicial = await leer_temperatura(parrilla)
         sp_inicio = (temp_inicial + margen_inicial) if temp_inicial else 25.0
         if sp_inicio > temperatura:

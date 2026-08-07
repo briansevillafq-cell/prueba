@@ -195,4 +195,3 @@ def iniciar_proceso():
 
 if __name__ == "__main__":
     iniciar_proceso()
-QUE OPINAS YA ESTA EL CODIGO ENTONCES

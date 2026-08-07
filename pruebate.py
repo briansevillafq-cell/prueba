@@ -6,14 +6,12 @@ from ika.driver import Shaker
 texto_overlay = ""
 camara_activa = True
 
-
 def obtener_temperatura():
     while True:
         try:
             return float(input("Ingrese la temperatura deseada en C (0 a 400): "))
         except ValueError:
             pass
-
 
 def obtener_rpm():
     while True:
@@ -22,7 +20,6 @@ def obtener_rpm():
         except ValueError:
             pass
 
-
 def obtener_tiempo():
     while True:
         try:
@@ -30,12 +27,10 @@ def obtener_tiempo():
         except ValueError:
             pass
 
-
 def esta_en_rango(temp_actual, temp_objetivo, tolerancia=3.0):
     if temp_actual is None:
         return False
     return (temp_objetivo - tolerancia) <= temp_actual <= (temp_objetivo + tolerancia)
-
 
 async def leer_temperatura(parrilla):
     try:
@@ -47,7 +42,6 @@ async def leer_temperatura(parrilla):
     except Exception:
         pass
     return None
-
 
 async def bucle_camara():
     global texto_overlay, camara_activa
@@ -76,7 +70,7 @@ async def bucle_camara():
             if texto_overlay:
                 cv2.rectangle(frame, (20, 20), (580, 75), (0, 0, 0), -1)
 
-                # Si es una alerta de sobretemperatura usa color rojo, sino verde
+                # Si es una alerta de sobretemperatura usa color rojo
                 color_texto = (0, 0, 255) if "ALERTA" in texto_overlay else (0, 255, 0)
 
                 cv2.putText(
@@ -100,7 +94,6 @@ async def bucle_camara():
         cap.release()
         cv2.destroyAllWindows()
         print("Camara cerrada correctamente.")
-
 
 async def esperar_hasta_rango(parrilla, temperatura_final, tolerancia=3.0):
     global texto_overlay
@@ -145,7 +138,6 @@ async def esperar_hasta_rango(parrilla, temperatura_final, tolerancia=3.0):
         else:
             print("Intentando obtener lectura del sensor...")
         await asyncio.sleep(4)
-
 
 async def mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia=3.0):
     global texto_overlay
@@ -216,7 +208,6 @@ async def mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia
     await asyncio.sleep(3)
     texto_overlay = ""
 
-
 async def apagar_equipo(parrilla):
     global camara_activa, texto_overlay
     texto_overlay = ""
@@ -234,7 +225,6 @@ async def apagar_equipo(parrilla):
         print(f"Error al apagar agitador: {e}")
 
     print("Equipo apagado correctamente.")
-
 
 async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
     parrilla = Shaker(address=puerto)
@@ -276,12 +266,10 @@ async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
     finally:
         await apagar_equipo(parrilla)
 
-
 async def programa_principal(puerto, temperatura, rpm, tiempo):
     task_camara = asyncio.create_task(bucle_camara())
     await ejecutar_parrilla(puerto, temperatura, rpm, tiempo)
     await task_camara
-
 
 def iniciar_proceso():
     try:
@@ -301,7 +289,6 @@ def iniciar_proceso():
         print("\nPrograma detenido manualmente por el usuario.")
     except Exception as e:
         print(f"\nNo se pudo completar el proceso: {e}")
-
 
 if __name__ == "__main__":
     iniciar_proceso()

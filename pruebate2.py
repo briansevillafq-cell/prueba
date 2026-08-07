@@ -1,6 +1,7 @@
 import asyncio
 from ika.driver import Shaker
 
+
 def obtener_temperatura():
     while True:
         try:
@@ -8,12 +9,14 @@ def obtener_temperatura():
         except ValueError:
             pass
 
+
 def obtener_rpm():
     while True:
         try:
             return float(input("Ingrese la velocidad de agitacion en RPM (300 a 3000): "))
         except ValueError:
             pass
+
 
 def obtener_tiempo():
     while True:
@@ -23,7 +26,7 @@ def obtener_tiempo():
             pass
 
 
-def esta_en_rango(temp_actual, temp_objetivo, tolerancia=5.0):
+def esta_en_rango(temp_actual, temp_objetivo, tolerancia=2.0):
     if temp_actual is None:
         return False
     return (temp_objetivo - tolerancia) <= temp_actual <= (temp_objetivo + tolerancia)
@@ -41,8 +44,13 @@ async def leer_temperatura(parrilla):
     return None
 
 
-async def esperar_hasta_rango(parrilla, temperatura_final, tolerancia=5.0):
-    if temperatura_final > 150:
+async def esperar_hasta_rango(parrilla, temperatura_final, tolerancia=2.0):
+    temp_inicial = await leer_temperatura(parrilla)
+
+    # Seleccion inteligente del margen de rampa
+    if temp_inicial is not None and abs(temperatura_final - temp_inicial) <= 5.0:
+        margen_rampa = 1.0  # Margen muy fino para saltos pequenos de temperatura
+    elif temperatura_final > 150:
         margen_rampa = 10.0
     elif temperatura_final > 80:
         margen_rampa = 6.0
@@ -157,14 +165,18 @@ async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
         await parrilla.control(equipment="shaker", on=True)
         await asyncio.sleep(0.3)
 
-        if temperatura > 150:
+        temp_inicial = await leer_temperatura(parrilla)
+
+        # Calculo de margen inicial segun salto termico
+        if temp_inicial is not None and abs(temperatura - temp_inicial) <= 5.0:
+            margen_inicial = 1.0
+        elif temperatura > 150:
             margen_inicial = 10.0
         elif temperatura > 80:
             margen_inicial = 6.0
         else:
             margen_inicial = 3.0
 
-        temp_inicial = await leer_temperatura(parrilla)
         sp_inicio = (temp_inicial + margen_inicial) if temp_inicial else 25.0
         if sp_inicio > temperatura:
             sp_inicio = temperatura
@@ -208,7 +220,6 @@ def iniciar_proceso():
         print("\nPrograma detenido manualmente por el usuario.")
     except Exception as e:
         print(f"\nNo se pudo completar el proceso: {e}")
-
 
 if __name__ == "__main__":
     iniciar_proceso()

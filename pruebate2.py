@@ -32,24 +32,47 @@ def esta_en_rango(temp_actual, temp_objetivo, tolerancia=5.0):
     return (temp_objetivo - tolerancia) <= temp_actual <= (temp_objetivo + tolerancia)
 
 
+def limpiar_valor(cadena):
+    if cadena is None:
+        return None
+    if isinstance(cadena, (int, float)):
+        return float(cadena)
+    try:
+        partes = str(cadena).strip().split()
+        if partes:
+            limpio = "".join(c for c in partes[0] if c.isdigit() or c in ".-")
+            if limpio:
+                return float(limpio)
+    except Exception:
+        pass
+    return None
+
+
 async def leer_temperatura(parrilla):
     try:
-        if hasattr(parrilla, "READ_ACTUAL_TEMPERATURE"):
-            val = await parrilla.query(parrilla.READ_ACTUAL_TEMPERATURE)
-            if val is not None:
-                return float(val)
-    except NotImplementedError:
+        res_placa = await parrilla.query("IN_PV_2")
+        val_placa = limpiar_valor(res_placa)
+        if val_placa is not None and val_placa >= 0:
+            return val_placa
+    except Exception:
         pass
-    except Exception as e:
-        print(f"Error de lectura directa [{type(e).__name__}]: {repr(e)}")
 
     try:
-        info = await parrilla.get()
-        val = info.get("temp", {}).get("actual")
-        if val is not None:
-            return float(val)
-    except Exception as e:
-        print(f"Error de lectura get [{type(e).__name__}]: {repr(e)}")
+        res_sonda = await parrilla.query("IN_PV_1")
+        val_sonda = limpiar_valor(res_sonda)
+        if val_sonda is not None and val_sonda >= 0:
+            return val_sonda
+    except Exception:
+        pass
+
+    try:
+        if hasattr(parrilla, "READ_ACTUAL_TEMPERATURE"):
+            res = await parrilla.query(parrilla.READ_ACTUAL_TEMPERATURE)
+            val = limpiar_valor(res)
+            if val is not None:
+                return val
+    except Exception:
+        pass
 
     return None
 
@@ -118,14 +141,26 @@ async def mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia
 async def apagar_equipo(parrilla):
     print("\nApagando equipo y liberando control remoto...")
     try:
-        await parrilla.set(equipment="heater", setpoint=0)
-        await parrilla.set(equipment="shaker", setpoint=0)
-        await asyncio.sleep(0.5)
         await parrilla.control(equipment="heater", on=False)
-        await parrilla.control(equipment="shaker", on=False)
-        print("Equipo apagado y setpoints reestablecidos a 0.")
     except Exception as e:
-        print(f"Error al apagar el equipo: {e}")
+        print(f"Error al apagar calentador: {e}")
+
+    try:
+        await parrilla.control(equipment="shaker", on=False)
+    except Exception as e:
+        print(f"Error al apagar agitador: {e}")
+
+    try:
+        await parrilla.set(equipment="heater", setpoint=0)
+    except Exception as e:
+        print(f"Error al restablecer setpoint calentador: {e}")
+
+    try:
+        await parrilla.set(equipment="shaker", setpoint=0)
+    except Exception as e:
+        print(f"Error al restablecer setpoint agitador: {e}")
+
+    print("Equipo apagado correctamente.")
 
 
 async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
@@ -135,20 +170,20 @@ async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
         try:
             await parrilla.control(equipment="heater", on=False)
             await parrilla.control(equipment="shaker", on=False)
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(0.5)
         except Exception:
             pass
 
         print("Configurando equipo...")
         await parrilla.set(equipment="shaker", setpoint=rpm)
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.3)
         await parrilla.set(equipment="heater", setpoint=temperatura)
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.3)
 
         await parrilla.control(equipment="shaker", on=True)
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.3)
         await parrilla.control(equipment="heater", on=True)
-        await asyncio.sleep(1.0)
+        await asyncio.sleep(0.5)
 
         print(f"Agitacion iniciada a {rpm:.0f} RPM.")
         print(f"Calentando hasta {temperatura:.1f} +/- 5.0 C.")
@@ -158,12 +193,10 @@ async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
 
         print("\nTiempo de mantenimiento finalizado.")
 
-    except asyncio.CancelledError:
-        print("\nInterrupcion detectada. Iniciando apagado de seguridad...")
-        raise
+    except (asyncio.CancelledError, KeyboardInterrupt):
+        print("\nInterrupcion detectada (Ctrl+C). Iniciando apagado de emergencia...")
     except Exception as e:
         print(f"\nError durante el proceso: {e}")
-        raise
     finally:
         await apagar_equipo(parrilla)
 
@@ -180,10 +213,10 @@ def iniciar_proceso():
         print(f"Tiempo efectivo: {tiempo:.2f} minutos")
 
         asyncio.run(ejecutar_parrilla("/dev/ttyUSB0", temperatura, rpm, tiempo))
-        print("\nProceso terminado con exito.")
+        print("\nProceso terminado.")
 
     except KeyboardInterrupt:
-        print("\nPrograma detenido manualmente. Salida segura realizada.")
+        print("\nPrograma detenido manualmente por el usuario.")
     except Exception as e:
         print(f"\nNo se pudo completar el proceso: {e}")
 

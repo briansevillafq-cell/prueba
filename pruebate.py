@@ -6,12 +6,14 @@ from ika.driver import Shaker
 texto_overlay = ""
 camara_activa = True
 
+
 def obtener_temperatura():
     while True:
         try:
             return float(input("Ingrese la temperatura deseada en C (0 a 400): "))
         except ValueError:
             pass
+
 
 def obtener_rpm():
     while True:
@@ -20,6 +22,7 @@ def obtener_rpm():
         except ValueError:
             pass
 
+
 def obtener_tiempo():
     while True:
         try:
@@ -27,10 +30,6 @@ def obtener_tiempo():
         except ValueError:
             pass
 
-def esta_en_rango(temp_actual, temp_objetivo, tolerancia=3.0):
-    if temp_actual is None:
-        return False
-    return (temp_objetivo - tolerancia) <= temp_actual <= (temp_objetivo + tolerancia)
 
 async def leer_temperatura(parrilla):
     try:
@@ -42,6 +41,7 @@ async def leer_temperatura(parrilla):
     except Exception:
         pass
     return None
+
 
 async def bucle_camara():
     global texto_overlay, camara_activa
@@ -66,24 +66,24 @@ async def bucle_camara():
                 await asyncio.sleep(0.01)
                 continue
 
-            # El texto SOLO se dibuja si la variable contiene un mensaje activo (en rango)
+            # El texto SOLO se dibuja si la variable contiene un mensaje activo
             if texto_overlay:
-                # Cuadro de fondo oscuro semi-transparente para lecturabilidad
-                cv2.rectangle(frame, (20, 20), (550, 75), (0, 0, 0), -1)
+                cv2.rectangle(frame, (20, 20), (580, 75), (0, 0, 0), -1)
 
-                # Texto en verde brillante
+                # Si es una alerta de sobretemperatura usa color rojo, sino verde
+                color_texto = (0, 0, 255) if "ALERTA" in texto_overlay else (0, 255, 0)
+
                 cv2.putText(
                     frame,
                     texto_overlay,
                     (30, 58),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.9,
-                    (0, 255, 0),
+                    0.8,
+                    color_texto,
                     2,
                     cv2.LINE_AA,
                 )
 
-            # Mostrar imagen en pantalla
             cv2.imshow("Monitoreo de Reaccion IKA", frame)
 
             if cv2.waitKey(1) & 0xFF == ord("q"):
@@ -95,9 +95,10 @@ async def bucle_camara():
         cv2.destroyAllWindows()
         print("Camara cerrada correctamente.")
 
+
 async def esperar_hasta_rango(parrilla, temperatura_final, tolerancia=3.0):
     global texto_overlay
-    texto_overlay = ""  # Oculta el mensaje en la camara mientras calienta o recupera
+    texto_overlay = ""  # Oculta el mensaje en la camara mientras calienta
 
     temp_inicial = await leer_temperatura(parrilla)
 
@@ -118,14 +119,35 @@ async def esperar_hasta_rango(parrilla, temperatura_final, tolerancia=3.0):
     while True:
         temp_actual = await leer_temperatura(parrilla)
         if temp_actual is not None:
+
+            # 1. PROTECCION DE SEGURIDAD EN SEGUNDO PLANO: No superar +20 C sobre el objetivo
+            if temp_actual > (temperatura_final + 20.0):
+                texto_overlay = "ALERTA: SOBRETEMPERATURA (+20C)"
+                print(
+                    f"\nALERTA DE SEGURIDAD: Temp actual ({temp_actual:.1f} C) "
+                    f"supero por 20 C el objetivo ({temperatura_final:.1f} C). Apagando calentador..."
+                )
+                await parrilla.control(equipment="heater", on=False)
+                await asyncio.sleep(4)
+                continue
+
+            # Reasegurar encendido si habia sido apagado por proteccion
+            await parrilla.control(equipment="heater", on=True)
+
+            # 2. CONTROL DE RAMPA
             if temp_actual >= (temperatura_final - margen_rampa):
                 await parrilla.set(equipment="heater", setpoint=temperatura_final)
                 print(
                     f"Tramo final | Temp actual: {temp_actual:.1f} C | "
                     f"Setpoint final: {temperatura_final:.1f} C"
                 )
-                if esta_en_rango(temp_actual, temperatura_final, tolerancia):
-                    print(f"\nTemperatura en rango alcanzada: {temp_actual:.1f} C. INICIANDO.")
+
+                # 3. CONDICION DE INICIO: Inicia SOLO cuando alcanza o supera la temperatura deseada
+                if temp_actual >= temperatura_final:
+                    print(
+                        f"\nTemperatura objetivo alcanzada/superada: {temp_actual:.1f} C. "
+                        f"INICIANDO CRONOMETRO."
+                    )
                     return temp_actual
             else:
                 setpoint_dinamico = temp_actual + margen_rampa
@@ -151,14 +173,29 @@ async def mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia
     while tiempo_restante > 0:
         temp_actual = await leer_temperatura(parrilla)
 
-        if temp_actual is not None and not esta_en_rango(temp_actual, temperatura, tolerancia):
-            texto_overlay = ""  # Oculta el mensaje si se sale de rango
-            print(f"\nTemperatura fuera del rango: {temp_actual:.1f} C.")
-            print("Recuperando temperatura...")
-            await esperar_hasta_rango(parrilla, temperatura, tolerancia=tolerancia)
-            ultima_medicion = loop.time()
-            print("Temperatura recuperada.\n")
-            continue
+        if temp_actual is not None:
+            # Proteccion de segundo plano (+20 C)
+            if temp_actual > (temperatura + 20.0):
+                texto_overlay = "ALERTA: SOBRETEMPERATURA (+20C)"
+                print(
+                    f"\nALERTA SEGURIDAD: Temp actual ({temp_actual:.1f} C) "
+                    f"excedio por 20 C el objetivo. Pausando cronometro y apagando calentador..."
+                )
+                await parrilla.control(equipment="heater", on=False)
+                await esperar_hasta_rango(parrilla, temperatura, tolerancia=tolerancia)
+                ultima_medicion = loop.time()
+                print("Temperatura recuperada.\n")
+                continue
+
+            # Verificacion de tolerancia inferior/superior aceptable para mantener cronometro
+            if temp_actual < (temperatura - tolerancia):
+                texto_overlay = ""
+                print(f"\nTemperatura cayo por debajo del rango: {temp_actual:.1f} C.")
+                print("Recuperando temperatura...")
+                await esperar_hasta_rango(parrilla, temperatura, tolerancia=tolerancia)
+                ultima_medicion = loop.time()
+                print("Temperatura recuperada.\n")
+                continue
 
         momento_actual = loop.time()
         tiempo_transcurrido = momento_actual - ultima_medicion
@@ -176,7 +213,6 @@ async def mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia
         segundos_restantes = segundos_totales % 60
         tiempo_transcurrido_valido = tiempo_total_segundos - tiempo_restante
 
-        # Actualiza el texto overlay para la camara SOLO cuando esta en rango
         texto_overlay = f"Tiempo restante: {minutos_restantes:02d}:{segundos_restantes:02d}"
 
         temp_mostrar = temp_actual if temp_actual is not None else 0.0

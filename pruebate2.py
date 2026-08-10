@@ -106,11 +106,11 @@ async def enfriar_por_sobretemperatura(parrilla, temperatura_limite):
     global texto_overlay
     print(f"\nIniciando enfriamiento pasivo hasta caer por debajo de {temperatura_limite:.1f} C...")
     
-    # Fijar el setpoint a 0.0 C para forzar al PID interno de IKA a entregar 0% de potencia
+    # Fijar el setpoint a 1.0 C (minimo valido) para forzar al PID interno de IKA a 0% de potencia
     try:
-        await parrilla.set(equipment="heater", setpoint=0.0)
+        await parrilla.set(equipment="heater", setpoint=1.0)
     except Exception as e:
-        print(f"Advertencia al fijar setpoint a 0.0 C: {e}")
+        print(f"Advertencia al fijar setpoint minimo a 1.0 C: {e}")
 
     await parrilla.control(equipment="heater", on=False)
     
@@ -145,22 +145,18 @@ async def esperar_hasta_rango(parrilla, temperatura_final, tolerancia=3.0):
                 await enfriar_por_sobretemperatura(parrilla, temperatura_final + 2.0)
                 continue
 
-            # 2. CONTROL DE RAMPA DINAMICA A +2.0 C Y FRENADO PREVENTIVO
+            # 2. CONTROL DE RAMPA DINAMICA A +2.0 C Y APAGADO PREVENTIVO AL FALTAR 3 C
             diferencia = temperatura_final - temp_actual
-            if diferencia > 5.0:
-                # Rampa de subida ajustada a +2.0 C sobre la temperatura real
+            if diferencia > 3.0:
+                # Rampa activa con avance de +2.0 C sobre la lectura real
                 setpoint_dinamico = min(temp_actual + 2.0, temperatura_final)
+                await parrilla.set(equipment="heater", setpoint=setpoint_dinamico)
                 await parrilla.control(equipment="heater", on=True)
             else:
-                # Frenado preventivo en los ultimos 5 C para compensar la inercia termica
+                # Apagado preventivo directo al faltar 3 C o menos para aprovechar la inercia
                 setpoint_dinamico = temperatura_final
-                if temp_actual >= (temperatura_final - 1.0):
-                    await parrilla.set(equipment="heater", setpoint=0.0)
-                    await parrilla.control(equipment="heater", on=False)
-                else:
-                    await parrilla.control(equipment="heater", on=True)
-
-            await parrilla.set(equipment="heater", setpoint=setpoint_dinamico)
+                await parrilla.set(equipment="heater", setpoint=1.0)
+                await parrilla.control(equipment="heater", on=False)
 
             print(
                 f"Rampa activa | Temp actual: {temp_actual:.1f} C | "
@@ -176,7 +172,7 @@ async def esperar_hasta_rango(parrilla, temperatura_final, tolerancia=3.0):
                 return temp_actual
         else:
             print("Error: Lectura de sensor invalida (None). Apagando calentador por seguridad...")
-            await parrilla.set(equipment="heater", setpoint=0.0)
+            await parrilla.set(equipment="heater", setpoint=1.0)
             await parrilla.control(equipment="heater", on=False)
         await asyncio.sleep(2)  # Consulta cada 2 segundos
 
@@ -215,9 +211,9 @@ async def mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia
                 print("Temperatura recuperada.\n")
                 continue
 
-            # Mantener setpoint en la temperatura objetivo o en 0 C si sobrepasa
+            # Mantener setpoint en la temperatura objetivo o en 1 C si sobrepasa
             if temp_actual > temperatura:
-                await parrilla.set(equipment="heater", setpoint=0.0)
+                await parrilla.set(equipment="heater", setpoint=1.0)
                 await parrilla.control(equipment="heater", on=False)
             else:
                 await parrilla.control(equipment="heater", on=True)
@@ -263,7 +259,7 @@ async def apagar_equipo(parrilla):
 
     print("\nApagando equipo y liberando control remoto...")
     try:
-        await parrilla.set(equipment="heater", setpoint=0.0)
+        await parrilla.set(equipment="heater", setpoint=1.0)
         await parrilla.control(equipment="heater", on=False)
     except Exception as e:
         print(f"Error al apagar calentador: {e}")
@@ -280,7 +276,7 @@ async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
     try:
         print("\nLimpiando estado del equipo...")
         try:
-            await parrilla.set(equipment="heater", setpoint=0.0)
+            await parrilla.set(equipment="heater", setpoint=1.0)
             await parrilla.control(equipment="heater", on=False)
             await parrilla.control(equipment="shaker", on=False)
             await asyncio.sleep(0.5)

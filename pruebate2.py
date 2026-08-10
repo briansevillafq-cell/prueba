@@ -102,6 +102,29 @@ async def bucle_camara():
         cv2.destroyAllWindows()
         print("Camara cerrada correctamente.")
 
+async def enfriar_por_sobretemperatura(parrilla, temperatura_limite):
+    global texto_overlay
+    print(f"\nIniciando enfriamiento pasivo hasta caer por debajo de {temperatura_limite:.1f} C...")
+    
+    # Fijar el setpoint a 0.0 C para forzar al PID interno de IKA a entregar 0% de potencia
+    try:
+        await parrilla.set(equipment="heater", setpoint=0.0)
+    except Exception as e:
+        print(f"Advertencia al fijar setpoint a 0.0 C: {e}")
+
+    await parrilla.control(equipment="heater", on=False)
+    
+    while True:
+        temp_actual = await leer_temperatura(parrilla)
+        if temp_actual is not None:
+            texto_overlay = f"ENFRIANDO: {temp_actual:.1f} C"
+            print(f"Enfriando pasivamente... Temp actual: {temp_actual:.1f} C (Objetivo: < {temperatura_limite:.1f} C)")
+            if temp_actual <= temperatura_limite:
+                print("Temperatura restablecida dentro de parametros seguros.")
+                texto_overlay = ""
+                break
+        await asyncio.sleep(2)  # Consulta cada 2 segundos
+
 async def esperar_hasta_rango(parrilla, temperatura_final, tolerancia=3.0):
     global texto_overlay
     texto_overlay = ""  # Oculta el mensaje en la camara mientras calienta
@@ -112,22 +135,31 @@ async def esperar_hasta_rango(parrilla, temperatura_final, tolerancia=3.0):
         temp_actual = await leer_temperatura(parrilla)
         if temp_actual is not None:
 
-            # 1. PROTECCION DE SEGURIDAD EN SEGUNDO PLANO: No superar +20 C sobre el objetivo
+            # 1. PROTECCION DE SEGURIDAD EN SEGUNDO PLANO: No superar +15 C sobre el objetivo
             if temp_actual > (temperatura_final + 15.0):
                 texto_overlay = "ALERTA: SOBRETEMPERATURA (+15C)"
                 print(
                     f"\nALERTA DE SEGURIDAD: Temp actual ({temp_actual:.1f} C) "
                     f"supero por 15 C el objetivo ({temperatura_final:.1f} C). Apagando calentador..."
                 )
-                await parrilla.control(equipment="heater", on=False)
-                await asyncio.sleep(4)
+                await enfriar_por_sobretemperatura(parrilla, temperatura_final + 2.0)
                 continue
 
-            await parrilla.control(equipment="heater", on=True)
+            # 2. CONTROL DE RAMPA DINAMICA A +2.0 C Y FRENADO PREVENTIVO
+            diferencia = temperatura_final - temp_actual
+            if diferencia > 5.0:
+                # Rampa de subida ajustada a +2.0 C sobre la temperatura real
+                setpoint_dinamico = min(temp_actual + 2.0, temperatura_final)
+                await parrilla.control(equipment="heater", on=True)
+            else:
+                # Frenado preventivo en los ultimos 5 C para compensar la inercia termica
+                setpoint_dinamico = temperatura_final
+                if temp_actual >= (temperatura_final - 1.0):
+                    await parrilla.set(equipment="heater", setpoint=0.0)
+                    await parrilla.control(equipment="heater", on=False)
+                else:
+                    await parrilla.control(equipment="heater", on=True)
 
-            # 2. RAMPA FINA ESTRICTA: Setpoint maximo a +1.0 C sobre la temperatura real
-            # Esto impide que el PID interno de IKA active el 100% de potencia
-            setpoint_dinamico = min(temp_actual + 1.0, temperatura_final)
             await parrilla.set(equipment="heater", setpoint=setpoint_dinamico)
 
             print(
@@ -144,8 +176,9 @@ async def esperar_hasta_rango(parrilla, temperatura_final, tolerancia=3.0):
                 return temp_actual
         else:
             print("Error: Lectura de sensor invalida (None). Apagando calentador por seguridad...")
+            await parrilla.set(equipment="heater", setpoint=0.0)
             await parrilla.control(equipment="heater", on=False)
-        await asyncio.sleep(4)
+        await asyncio.sleep(2)  # Consulta cada 2 segundos
 
 async def mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia=3.0):
     global texto_overlay
@@ -160,15 +193,14 @@ async def mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia
         temp_actual = await leer_temperatura(parrilla)
 
         if temp_actual is not None:
-            # Proteccion de segundo plano (+20 C)
+            # Proteccion de segundo plano (+15 C)
             if temp_actual > (temperatura + 15.0):
                 texto_overlay = "ALERTA: SOBRETEMPERATURA (+15C)"
                 print(
                     f"\nALERTA SEGURIDAD: Temp actual ({temp_actual:.1f} C) "
                     f"excedio por 15 C el objetivo. Pausando cronometro y apagando calentador..."
                 )
-                await parrilla.control(equipment="heater", on=False)
-                await esperar_hasta_rango(parrilla, temperatura, tolerancia=tolerancia)
+                await enfriar_por_sobretemperatura(parrilla, temperatura + 2.0)
                 ultima_medicion = loop.time()
                 print("Temperatura recuperada.\n")
                 continue
@@ -182,6 +214,14 @@ async def mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia
                 ultima_medicion = loop.time()
                 print("Temperatura recuperada.\n")
                 continue
+
+            # Mantener setpoint en la temperatura objetivo o en 0 C si sobrepasa
+            if temp_actual > temperatura:
+                await parrilla.set(equipment="heater", setpoint=0.0)
+                await parrilla.control(equipment="heater", on=False)
+            else:
+                await parrilla.control(equipment="heater", on=True)
+                await parrilla.set(equipment="heater", setpoint=temperatura)
 
         momento_actual = loop.time()
         tiempo_transcurrido = momento_actual - ultima_medicion
@@ -209,7 +249,7 @@ async def mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia
         )
 
         if tiempo_restante > 0:
-            tiempo_espera = min(5, tiempo_restante)
+            tiempo_espera = min(2, tiempo_restante)  # Consulta cada 2 segundos
             await asyncio.sleep(tiempo_espera)
 
     texto_overlay = "REACCION FINALIZADA"
@@ -223,6 +263,7 @@ async def apagar_equipo(parrilla):
 
     print("\nApagando equipo y liberando control remoto...")
     try:
+        await parrilla.set(equipment="heater", setpoint=0.0)
         await parrilla.control(equipment="heater", on=False)
     except Exception as e:
         print(f"Error al apagar calentador: {e}")
@@ -239,6 +280,7 @@ async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
     try:
         print("\nLimpiando estado del equipo...")
         try:
+            await parrilla.set(equipment="heater", setpoint=0.0)
             await parrilla.control(equipment="heater", on=False)
             await parrilla.control(equipment="shaker", on=False)
             await asyncio.sleep(0.5)
@@ -253,7 +295,7 @@ async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
 
         temp_inicial = await leer_temperatura(parrilla)
         if temp_inicial is not None:
-            sp_inicio = min((temp_inicial + 1.0), temperatura)
+            sp_inicio = min((temp_inicial + 2.0), temperatura)
         else:
             sp_inicio = 25.0
 

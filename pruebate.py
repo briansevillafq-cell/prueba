@@ -211,13 +211,14 @@ async def mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia
                 print("Temperatura recuperada.\n")
                 continue
 
-            # Mantener setpoint en la temperatura objetivo o en 1 C si sobrepasa
+            # Mantener setpoint en 1 C si sobrepasa o inyectar calor suave (+0.8 C) si cae
             if temp_actual > temperatura:
                 await parrilla.set(equipment="heater", setpoint=1.0)
                 await parrilla.control(equipment="heater", on=False)
             else:
+                sp_mantener = min(temp_actual + 0.8, temperatura)
+                await parrilla.set(equipment="heater", setpoint=sp_mantener)
                 await parrilla.control(equipment="heater", on=True)
-                await parrilla.set(equipment="heater", setpoint=temperatura)
 
         momento_actual = loop.time()
         tiempo_transcurrido = momento_actual - ultima_medicion

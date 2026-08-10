@@ -5,7 +5,7 @@ from ika.driver import Shaker
 # Variable global compartida para el texto sobre el video
 texto_overlay = ""
 camara_activa = True
-ultima_temperatura_valida = None
+ultima_temp_placa = None
 
 def obtener_temperatura():
     while True:
@@ -28,23 +28,21 @@ def obtener_tiempo():
         except ValueError:
             pass
 
-def esta_en_rango(temp_actual, temp_objetivo, tolerancia=3.0):
-    if temp_actual is None:
-        return False
-    return (temp_objetivo - tolerancia) <= temp_actual <= (temp_objetivo + tolerancia)
-
-async def leer_temperatura(parrilla):
-    global ultima_temperatura_valida
+async def leer_temperatura_placa(parrilla):
+    """
+    Lee unicamente el sensor interno de la placa calefactora real (IN_PV_1)
+    """
+    global ultima_temp_placa
     try:
-        res_placa = await parrilla.query("IN_PV_2")
+        res_placa = await parrilla.query("IN_PV_1")
         if res_placa is not None:
             val_placa = float(res_placa)
             if val_placa >= 0:
-                if ultima_temperatura_valida is not None:
-                    if abs(val_placa - ultima_temperatura_valida) > 15.0:
-                        print(f"Advertencia: Lectura erratica ignorada ({val_placa:.1f} C). Se conserva {ultima_temperatura_valida:.1f} C")
-                        return ultima_temperatura_valida
-                ultima_temperatura_valida = val_placa
+                if ultima_temp_placa is not None:
+                    # Filtro basico para lecturas erraticas drásticas
+                    if abs(val_placa - ultima_temp_placa) > 20.0:
+                        val_placa = ultima_temp_placa
+                ultima_temp_placa = val_placa
                 return val_placa
     except Exception:
         pass
@@ -76,7 +74,7 @@ async def bucle_camara():
             if texto_overlay:
                 cv2.rectangle(frame, (20, 20), (580, 75), (0, 0, 0), -1)
 
-                color_texto = (0, 0, 255) if "ALERTA" in texto_overlay else (0, 255, 0)
+                color_texto = (0, 255, 0)
 
                 cv2.putText(
                     frame,
@@ -104,31 +102,23 @@ async def esperar_hasta_rango(parrilla, temperatura_final):
     global texto_overlay
     texto_overlay = ""
 
-    print(f"\nEsperando a que el PID de IKA alcance {temperatura_final:.1f} C...")
+    print(f"\nEsperando a que la placa de la parrilla alcance {temperatura_final:.1f} C...")
 
     while True:
-        temp_actual = await leer_temperatura(parrilla)
-        if temp_actual is not None:
+        temp_placa = await leer_temperatura_placa(parrilla)
+        txt_placa = f"{temp_placa:.1f} C" if temp_placa is not None else "N/A"
 
-            # Seguridad: Corte de emergencia si supera por 15 C
-            if temp_actual > (temperatura_final + 15.0):
-                texto_overlay = "ALERTA: SOBRETEMPERATURA (+15C)"
-                print(f"\nALERTA DE SEGURIDAD: Temp actual ({temp_actual:.1f} C) excedio limite. Apagando equipo...")
-                await parrilla.control(equipment="heater", on=False)
-                raise RuntimeError("Proceso cancelado por sobretemperatura.")
+        print(f"Calentando... | Temp Placa Real: {txt_placa} | Goal: {temperatura_final:.1f} C")
 
-            print(f"Calentando... Temp actual: {temp_actual:.1f} C | Objetivo fijo: {temperatura_final:.1f} C")
+        texto_overlay = f"Placa Real: {txt_placa}"
 
-            # Inicia el cronometro cuando la temperatura llega o supera el objetivo
-            if temp_actual >= temperatura_final:
-                print(f"\nTemperatura objetivo alcanzada: {temp_actual:.1f} C. INICIANDO CRONOMETRO.")
-                return temp_actual
-        else:
-            print("Error: Lectura de sensor invalida (None).")
+        if temp_placa is not None and temp_placa >= temperatura_final:
+            print(f"\nTemperatura objetivo alcanzada en la placa: {temp_placa:.1f} C. INICIANDO CRONOMETRO.")
+            return temp_placa
 
         await asyncio.sleep(2)
 
-async def mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia=3.0):
+async def mantener_temperatura(parrilla, temperatura, tiempo_minutos):
     global texto_overlay
     tiempo_total_segundos = tiempo_minutos * 60
     tiempo_restante = tiempo_total_segundos
@@ -138,24 +128,7 @@ async def mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia
     print(f"\nIniciando temporizador de {tiempo_minutos:.2f} minutos.")
 
     while tiempo_restante > 0:
-        temp_actual = await leer_temperatura(parrilla)
-
-        if temp_actual is not None:
-            # Seguridad: Corte de emergencia si supera por 15 C
-            if temp_actual > (temperatura + 15.0):
-                texto_overlay = "ALERTA: SOBRETEMPERATURA (+15C)"
-                print(f"\nALERTA SEGURIDAD: Temp actual ({temp_actual:.1f} C) excedio limite. Apagando...")
-                await parrilla.control(equipment="heater", on=False)
-                raise RuntimeError("Proceso cancelado por sobretemperatura durante el cronometro.")
-
-            # Pausa/Recuperacion si cae por debajo de la tolerancia
-            if temp_actual < (temperatura - tolerancia):
-                texto_overlay = ""
-                print(f"\nTemperatura cayo a {temp_actual:.1f} C. Esperando recuperacion del PID IKA...")
-                await esperar_hasta_rango(parrilla, temperatura)
-                ultima_medicion = loop.time()
-                print("Temperatura recuperada.\n")
-                continue
+        temp_placa = await leer_temperatura_placa(parrilla)
 
         momento_actual = loop.time()
         tiempo_transcurrido = momento_actual - ultima_medicion
@@ -173,13 +146,14 @@ async def mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia
         segundos_restantes = segundos_totales % 60
         tiempo_transcurrido_valido = tiempo_total_segundos - tiempo_restante
 
-        texto_overlay = f"Tiempo restante: {minutos_restantes:02d}:{segundos_restantes:02d}"
+        txt_placa = f"{temp_placa:.1f} C" if temp_placa is not None else "N/A"
 
-        temp_mostrar = temp_actual if temp_actual is not None else 0.0
+        texto_overlay = f"T: {minutos_restantes:02d}:{segundos_restantes:02d} | Placa: {txt_placa}"
+
         print(
             f"Tiempo restante: {minutos_restantes:02d}:{segundos_restantes:02d} | "
             f"Tiempo transcurrido: {int(tiempo_transcurrido_valido)} s | "
-            f"Temp actual: {temp_mostrar:.1f} C"
+            f"Temp Placa Real: {txt_placa}"
         )
 
         if tiempo_restante > 0:
@@ -227,17 +201,17 @@ async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
         await parrilla.control(equipment="shaker", on=True)
         await asyncio.sleep(0.3)
 
-        # FIJAR LA TEMPERATURA DESEADA UNA SOLA VEZ AL INICIO
+        # FIJAR LA TEMPERATURA Y ENCENDER UNA SOLA VEZ
         await parrilla.set(equipment="heater", setpoint=temperatura)
         await asyncio.sleep(0.3)
         await parrilla.control(equipment="heater", on=True)
         await asyncio.sleep(0.5)
 
         print(f"Agitacion iniciada a {rpm:.0f} RPM.")
-        print(f"Setpoint fijo configurado en {temperatura:.1f} C. Control cedido al PID IKA.")
+        print(f"Setpoint fijo en {temperatura:.1f} C enviado. Control asignado a la parrilla.")
 
         await esperar_hasta_rango(parrilla, temperatura)
-        await mantener_temperatura(parrilla, temperatura, tiempo_minutos, tolerancia=3.0)
+        await mantener_temperatura(parrilla, temperatura, tiempo_minutos)
 
         print("\nTiempo de reaccion finalizado.")
 

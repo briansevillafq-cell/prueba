@@ -1,11 +1,16 @@
 import asyncio
 import cv2
+import time
 from ika.driver import Shaker
 
-# Variable global compartida para el texto sobre el video
+# Variables globales compartidas
 texto_overlay = ""
+color_overlay = (0, 255, 0)  # Verde por defecto (BGR)
 camara_activa = True
-ultima_temp_solucion = None
+ultima_temp_placa = None
+
+# Configuración del parpadeo (en segundos)
+INTERVALO_PARPADEO = 0.5 
 
 def obtener_temperatura():
     while True:
@@ -28,43 +33,28 @@ def obtener_tiempo():
         except ValueError:
             pass
 
-async def leer_temperaturas(parrilla):
+async def leer_temperatura_placa(parrilla):
     """
-    Lee la temperatura de la solucion (IN_PV_2) y la temperatura real de la placa de la parrilla (IN_PV_1)
+    Lee unicamente el sensor interno de la placa calefactora real (IN_PV_1)
     """
-    global ultima_temp_solucion
-    temp_solucion = None
-    temp_placa_real = None
-
-    # 1. Leer sensor de solucion/reaccion (IN_PV_2)
-    try:
-        res_sol = await parrilla.query("IN_PV_2")
-        if res_sol is not None:
-            val_sol = float(res_sol)
-            if val_sol >= 0:
-                if ultima_temp_solucion is not None:
-                    # Filtro basico para lecturas erraticas drásticas
-                    if abs(val_sol - ultima_temp_solucion) > 20.0:
-                        val_sol = ultima_temp_solucion
-                ultima_temp_solucion = val_sol
-                temp_solucion = val_sol
-    except Exception:
-        pass
-
-    # 2. Leer sensor interno real de la placa calefactora (IN_PV_1)
+    global ultima_temp_placa
     try:
         res_placa = await parrilla.query("IN_PV_1")
         if res_placa is not None:
             val_placa = float(res_placa)
             if val_placa >= 0:
-                temp_placa_real = val_placa
+                if ultima_temp_placa is not None:
+                    # Filtro basico para lecturas erraticas drasticas
+                    if abs(val_placa - ultima_temp_placa) > 20.0:
+                        val_placa = ultima_temp_placa
+                ultima_temp_placa = val_placa
+                return val_placa
     except Exception:
         pass
-
-    return temp_solucion, temp_placa_real
+    return None
 
 async def bucle_camara():
-    global texto_overlay, camara_activa
+    global texto_overlay, color_overlay, camara_activa
 
     # Configuracion de la camara USB V4L2 a 720p MJPEG
     cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
@@ -77,7 +67,7 @@ async def bucle_camara():
         print("Error: No se pudo abrir la camara /dev/video0")
         return
 
-    print("Camara iniciada a 720p MJPEG @ 30 FPS en pantalla.")
+    print("Camara iniciada. Presione 'q' en la ventana de video para salir.")
 
     try:
         while camara_activa:
@@ -87,24 +77,32 @@ async def bucle_camara():
                 continue
 
             if texto_overlay:
-                cv2.rectangle(frame, (20, 20), (750, 85), (0, 0, 0), -1)
+                # Lógica de parpadeo SOLO si el color es Rojo (estado OFF)
+                mostrar_texto = True
+                if color_overlay == (0, 0, 255): # Rojo BGR
+                    if int(time.time() / INTERVALO_PARPADEO) % 2 == 0:
+                        mostrar_texto = False
 
-                color_texto = (0, 255, 0)
+                if mostrar_texto:
+                    # Recuadro adaptado al ancho del texto
+                    cv2.rectangle(frame, (20, 20), (820, 75), (0, 0, 0), -1)
 
-                cv2.putText(
-                    frame,
-                    texto_overlay,
-                    (30, 60),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.75,
-                    color_texto,
-                    2,
-                    cv2.LINE_AA,
-                )
+                    cv2.putText(
+                        frame,
+                        texto_overlay,
+                        (30, 58),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.7,
+                        color_overlay,
+                        2,
+                        cv2.LINE_AA,
+                    )
 
             cv2.imshow("Monitoreo de Reaccion IKA", frame)
 
+            # Salida manual con la tecla 'q'
             if cv2.waitKey(1) & 0xFF == ord("q"):
+                camara_activa = False
                 break
 
             await asyncio.sleep(0.001)
@@ -114,32 +112,28 @@ async def bucle_camara():
         print("Camara cerrada correctamente.")
 
 async def esperar_hasta_rango(parrilla, temperatura_final):
-    global texto_overlay
-    texto_overlay = ""
+    global texto_overlay, color_overlay
+    color_overlay = (0, 255, 0)  # Verde (fijo)
 
-    print(f"\nEsperando a que la reaccion alcance {temperatura_final:.1f} C...")
+    print(f"\nEsperando a que la placa de la parrilla alcance {temperatura_final:.1f} C...")
 
     while True:
-        temp_sol, temp_placa = await leer_temperaturas(parrilla)
-        txt_sol = f"{temp_sol:.1f} C" if temp_sol is not None else "N/A"
+        temp_placa = await leer_temperatura_placa(parrilla)
         txt_placa = f"{temp_placa:.1f} C" if temp_placa is not None else "N/A"
 
-        # Mensaje de consola con la temperatura real de la placa de la parrilla
-        print(
-            f"Calentando... | Temp Reaccion: {txt_sol} | "
-            f"Temp Real Parrilla (Placa): {txt_placa} | Meta: {temperatura_final:.1f} C"
-        )
+        print(f"Calentando... | Temp Placa Real: {txt_placa} | Goal: {temperatura_final:.1f} C")
+        texto_overlay = f"Temperatua Placa: {txt_placa}"
 
-        texto_overlay = f"Calentando... | Temp Reaccion: {txt_sol}"
-
-        if temp_sol is not None and temp_sol >= temperatura_final:
-            print(f"\nTemperatura objetivo alcanzada en la reaccion: {temp_sol:.1f} C. INICIANDO CRONOMETRO.")
-            return temp_sol
+        if temp_placa is not None and temp_placa >= temperatura_final:
+            print(f"\nTemperatura objetivo alcanzada en la placa: {temp_placa:.1f} C. INICIANDO CRONOMETRO.")
+            return temp_placa
 
         await asyncio.sleep(2)
 
 async def mantener_temperatura(parrilla, temperatura, tiempo_minutos):
-    global texto_overlay
+    global texto_overlay, color_overlay
+    color_overlay = (0, 255, 0)  # Verde (fijo)
+
     tiempo_total_segundos = tiempo_minutos * 60
     tiempo_restante = tiempo_total_segundos
     loop = asyncio.get_running_loop()
@@ -148,7 +142,7 @@ async def mantener_temperatura(parrilla, temperatura, tiempo_minutos):
     print(f"\nIniciando temporizador de {tiempo_minutos:.2f} minutos.")
 
     while tiempo_restante > 0:
-        temp_sol, temp_placa = await leer_temperaturas(parrilla)
+        temp_placa = await leer_temperatura_placa(parrilla)
 
         momento_actual = loop.time()
         tiempo_transcurrido = momento_actual - ultima_medicion
@@ -158,36 +152,31 @@ async def mantener_temperatura(parrilla, temperatura, tiempo_minutos):
         if tiempo_restante < 0:
             tiempo_restante = 0
 
-        # Calculo de tiempo transcurrido en minutos y segundos
-        segundos_transcurridos_totales = int(tiempo_total_segundos - tiempo_restante)
-        minutos_transcurridos = segundos_transcurridos_totales // 60
-        segundos_transcurridos = segundos_transcurridos_totales % 60
+        segundos_totales = int(tiempo_restante)
+        if tiempo_restante > segundos_totales:
+            segundos_totales += 1
 
-        txt_sol = f"{temp_sol:.1f} C" if temp_sol is not None else "N/A"
+        minutos_restantes = segundos_totales // 60
+        segundos_restantes = segundos_totales % 60
+        tiempo_transcurrido_valido = tiempo_total_segundos - tiempo_restante
+
         txt_placa = f"{temp_placa:.1f} C" if temp_placa is not None else "N/A"
+        
+        texto_overlay = f"Tiempo restante: {minutos_restantes:02d}:{segundos_restantes:02d} | Temperatua Placa: {txt_placa}"
 
-        texto_overlay = f"T. Reaccion: {minutos_transcurridos:02d}:{segundos_transcurridos:02d} | Temp Real: {txt_sol}"
-
-        # Muestra en la terminal: Tiempo transcurrido + Temp Reaccion + Temp Real Parrilla (Placa)
         print(
-            f"Tiempo transcurrido: {minutos_transcurridos:02d}:{segundos_transcurridos:02d} | "
-            f"Temp Reaccion: {txt_sol} | Temp Real Parrilla (Placa): {txt_placa}"
+            f"Tiempo restante: {minutos_restantes:02d}:{segundos_restantes:02d} | "
+            f"Tiempo transcurrido: {int(tiempo_transcurrido_valido)} s | "
+            f"Temp Placa Real: {txt_placa}"
         )
 
         if tiempo_restante > 0:
             tiempo_espera = min(2, tiempo_restante)
             await asyncio.sleep(tiempo_espera)
 
-    texto_overlay = "REACCION FINALIZADA"
-    await asyncio.sleep(3)
-    texto_overlay = ""
-
 async def apagar_equipo(parrilla):
-    global camara_activa, texto_overlay
-    texto_overlay = ""
-    camara_activa = False
-
-    print("\nApagando equipo y liberando control remoto...")
+    """Apaga los elementos calefactor y agitador de forma segura."""
+    print("\nApagando calefactor y agitador...")
     try:
         await parrilla.set(equipment="heater", setpoint=1.0)
         await parrilla.control(equipment="heater", on=False)
@@ -199,7 +188,35 @@ async def apagar_equipo(parrilla):
     except Exception as e:
         print(f"Error al apagar agitador: {e}")
 
-    print("Equipo apagado correctamente.")
+    print("Calefaccion y agitación APAGADAS.")
+
+async def cronometro_post_reaccion(parrilla):
+    """
+    Actualiza el texto global con la leyenda explícita '[OFF] Tiempo sin calentar y agitar: +MM:SS'
+    en ROJO INTERMITENTE.
+    """
+    global texto_overlay, color_overlay, camara_activa
+    color_overlay = (0, 0, 255)  # Rojo BGR (activa parpadeo)
+    inicio_post = time.time()
+
+    print("\nIniciando cronometro post-reaccion INTERMITENTE en rojo.")
+    print("Presione 'q' en la ventana de video para finalizar por completo.")
+
+    while camara_activa:
+        tiempo_inactivo = int(time.time() - inicio_post)
+        horas = tiempo_inactivo // 3600
+        minutos = (tiempo_inactivo % 3600) // 60
+        segundos = tiempo_inactivo % 60
+
+        if horas > 0:
+            str_tiempo = f"{horas:02d}:{minutos:02d}:{segundos:02d}"
+        else:
+            str_tiempo = f"{minutos:02d}:{segundos:02d}"
+
+        # Texto explícito solicitado
+        texto_overlay = f"[OFF] Tiempo sin calentar y agitar: +{str_tiempo}"
+        
+        await asyncio.sleep(1)
 
 async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
     parrilla = Shaker(address=puerto)
@@ -219,7 +236,6 @@ async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
         await parrilla.control(equipment="shaker", on=True)
         await asyncio.sleep(0.3)
 
-        # FIJAR LA TEMPERATURA Y ENCENDER UNA SOLA VEZ
         await parrilla.set(equipment="heater", setpoint=temperatura)
         await asyncio.sleep(0.3)
         await parrilla.control(equipment="heater", on=True)
@@ -234,11 +250,14 @@ async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
         print("\nTiempo de reaccion finalizado.")
 
     except (asyncio.CancelledError, KeyboardInterrupt):
-        print("\nInterrupcion detectada (Ctrl+C). Iniciando apagado de emergencia...")
+        print("\nInterrupcion detectada (Ctrl+C). Iniciando apagado...")
     except Exception as e:
         print(f"\nError durante el proceso: {e}")
     finally:
+        # Apaga calefacción y agitación
         await apagar_equipo(parrilla)
+        # Mantiene la cámara activa con el mensaje explícito en rojo intermitente
+        await cronometro_post_reaccion(parrilla)
 
 async def programa_principal(puerto, temperatura, rpm, tiempo):
     task_camara = asyncio.create_task(bucle_camara())

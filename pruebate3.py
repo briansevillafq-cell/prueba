@@ -4,24 +4,23 @@ import time
 import cv2
 from ika.driver import Shaker
 
-# Variables globales compartidas
+# variables globales
 texto_overlay = "EN ESPERA"
-color_overlay = (0, 255, 0)  # Verde BGR por defecto
+color_overlay = (0, 255, 0)
 camara_activa_global = False
 preguntando_cierre = False
 ultima_temp_placa = None
 
-# Coordenadas y dimensiones para la caja de diálogo táctil en la ventana OpenCV
 BTN_YES_RECT = None
 BTN_NO_RECT = None
 
 
 def callback_raton_camara(event, x, y, flags, param):
-    """Procesa los clics en la ventana OpenCV para responder la pregunta post-reacción."""
+    # click en ventana
     global camara_activa_global, preguntando_cierre, BTN_YES_RECT, BTN_NO_RECT
 
     if event == cv2.EVENT_LBUTTONDOWN and preguntando_cierre:
-        # Clic en "Sí"
+        # si
         if BTN_YES_RECT:
             x1, y1, x2, y2 = BTN_YES_RECT
             if x1 <= x <= x2 and y1 <= y <= y2:
@@ -29,17 +28,15 @@ def callback_raton_camara(event, x, y, flags, param):
                 preguntando_cierre = False
                 return
 
-        # Clic en "No" -> La pregunta y la cámara PERMANECEN en pantalla
+        # no
         if BTN_NO_RECT:
             x1, y1, x2, y2 = BTN_NO_RECT
             if x1 <= x <= x2 and y1 <= y <= y2:
-                print(
-                    "Seleccionado 'No'. La cámara y la pregunta permanecen activas."
-                )
+                print("No seleccionado")
 
 
 def bucle_camara_hilo(app_screen=None):
-    """Hilo exclusivo de captura OpenCV ajustado a 491x302 px (~13x8 cm) con texto fijo."""
+    # hilo camara
     global texto_overlay, color_overlay, camara_activa_global, preguntando_cierre
     global BTN_YES_RECT, BTN_NO_RECT
 
@@ -48,7 +45,7 @@ def bucle_camara_hilo(app_screen=None):
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
     if not cap.isOpened():
-        print("Error: No se pudo abrir la cámara /dev/video0")
+        print("Error camara")
         camara_activa_global = False
         if app_screen:
             from kivy.clock import Clock
@@ -58,8 +55,8 @@ def bucle_camara_hilo(app_screen=None):
             )
         return
 
-    cv2.namedWindow("Monitoreo de Reaccion IKA")
-    cv2.setMouseCallback("Monitoreo de Reaccion IKA", callback_raton_camara)
+    cv2.namedWindow("LIVE")
+    cv2.setMouseCallback("LIVE", callback_raton_camara)
 
     while camara_activa_global:
         ret, frame = cap.read()
@@ -67,24 +64,20 @@ def bucle_camara_hilo(app_screen=None):
             time.sleep(0.01)
             continue
 
-        # Redimensionar el cuadro a exactamente ~13 cm x 8 cm (491 x 302 píxeles)
-        frame = cv2.resize(frame, (491, 302), interpolation=cv2.INTER_AREA)
+        # resize 600x300
+        frame = cv2.resize(frame, (600, 300), interpolation=cv2.INTER_AREA)
         h, w, _ = frame.shape
 
-        # ======================================================================
-        # 1. OVERLAY SUPERIOR (Texto dinámico, proporcional y FIJO sin parpadeo)
-        # ======================================================================
+        # overlay texto
         if texto_overlay:
-            font_scale = 0.42
+            font_scale = 0.45
             thickness = 1
             font = cv2.FONT_HERSHEY_SIMPLEX
 
-            # Calcular el ancho y alto del texto dinámicamente
             (text_w, text_h), baseline = cv2.getTextSize(
                 texto_overlay, font, font_scale, thickness
             )
 
-            # Recuadro negro adaptado proporcionalmente a las dimensiones del texto
             margin = 8
             cv2.rectangle(
                 frame,
@@ -94,7 +87,6 @@ def bucle_camara_hilo(app_screen=None):
                 -1,
             )
 
-            # Dibujar el texto (SIEMPRE VISIBLE, sin parpadeo)
             cv2.putText(
                 frame,
                 texto_overlay,
@@ -106,17 +98,14 @@ def bucle_camara_hilo(app_screen=None):
                 cv2.LINE_AA,
             )
 
-        # ======================================================================
-        # 2. OVERLAY INFERIOR DERECHO (Pregunta interactiva con botones reescalados)
-        # ======================================================================
+        # menu cierre
         if preguntando_cierre:
-            box_w, box_h = 240, 55
+            box_w, box_h = 250, 55
             box_x1 = w - box_w - 10
             box_y1 = h - box_h - 10
             box_x2 = w - 10
             box_y2 = h - 10
 
-            # Caja contenedora
             cv2.rectangle(
                 frame, (box_x1, box_y1), (box_x2, box_y2), (0, 0, 0), -1
             )
@@ -135,9 +124,9 @@ def bucle_camara_hilo(app_screen=None):
                 cv2.LINE_AA,
             )
 
-            # Botón "Sí"
-            btn_yes_x1, btn_yes_y1 = box_x1 + 80, box_y1 + 26
-            btn_yes_x2, btn_yes_y2 = box_x1 + 145, box_y1 + 48
+            # boton Si
+            btn_yes_x1, btn_yes_y1 = box_x1 + 85, box_y1 + 26
+            btn_yes_x2, btn_yes_y2 = box_x1 + 150, box_y1 + 48
             BTN_YES_RECT = (btn_yes_x1, btn_yes_y1, btn_yes_x2, btn_yes_y2)
 
             cv2.rectangle(
@@ -158,9 +147,9 @@ def bucle_camara_hilo(app_screen=None):
                 cv2.LINE_AA,
             )
 
-            # Botón "No"
-            btn_no_x1, btn_no_y1 = box_x1 + 155, box_y1 + 26
-            btn_no_x2, btn_no_y2 = box_x1 + 220, box_y1 + 48
+            # boton No
+            btn_no_x1, btn_no_y1 = box_x1 + 160, box_y1 + 26
+            btn_no_x2, btn_no_y2 = box_x1 + 225, box_y1 + 48
             BTN_NO_RECT = (btn_no_x1, btn_no_y1, btn_no_x2, btn_no_y2)
 
             cv2.rectangle(
@@ -203,6 +192,7 @@ def bucle_camara_hilo(app_screen=None):
 
 
 async def leer_temperatura_placa(parrilla):
+    # lectura sensor placa
     global ultima_temp_placa
     try:
         res_placa = await parrilla.query("IN_PV_1")
@@ -220,6 +210,7 @@ async def leer_temperatura_placa(parrilla):
 
 
 async def esperar_hasta_rango(parrilla, temperatura_final):
+    # calentamiento inicial
     global texto_overlay, color_overlay
     color_overlay = (0, 255, 0)
 
@@ -237,6 +228,7 @@ async def esperar_hasta_rango(parrilla, temperatura_final):
 
 
 async def mantener_temperatura(parrilla, temperatura, tiempo_minutos):
+    # tiempo de reaccion
     global texto_overlay, color_overlay
     color_overlay = (0, 255, 0)
 
@@ -266,6 +258,7 @@ async def mantener_temperatura(parrilla, temperatura, tiempo_minutos):
 
 
 async def apagar_equipo(parrilla):
+    # apagado seguro
     try:
         await parrilla.set(equipment="heater", setpoint=1.0)
         await parrilla.control(equipment="heater", on=False)
@@ -279,8 +272,9 @@ async def apagar_equipo(parrilla):
 
 
 async def cronometro_post_reaccion(parrilla):
+    # post reaccion
     global texto_overlay, color_overlay, camara_activa_global, preguntando_cierre
-    color_overlay = (0, 0, 255)  # Rojo BGR constante (FIJO)
+    color_overlay = (0, 0, 255)
     preguntando_cierre = True
     inicio_post = time.time()
 
@@ -300,6 +294,7 @@ async def cronometro_post_reaccion(parrilla):
 
 
 async def ejecutar_parrilla(puerto, temperatura, rpm, tiempo_minutos):
+    # inicio proceso
     parrilla = Shaker(address=puerto)
     try:
         try:

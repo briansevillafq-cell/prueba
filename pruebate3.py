@@ -8,37 +8,12 @@ from ika.driver import Shaker
 texto_overlay = "EN ESPERA"
 color_overlay = (0, 255, 0)
 camara_activa_global = False
-preguntando_cierre = False
 ultima_temp_placa = None
-
-BTN_YES_RECT = None
-BTN_NO_RECT = None
-
-
-def callback_raton_camara(event, x, y, flags, param):
-    # click en ventana
-    global camara_activa_global, preguntando_cierre, BTN_YES_RECT, BTN_NO_RECT
-
-    if event == cv2.EVENT_LBUTTONDOWN and preguntando_cierre:
-        # si
-        if BTN_YES_RECT:
-            x1, y1, x2, y2 = BTN_YES_RECT
-            if x1 <= x <= x2 and y1 <= y <= y2:
-                camara_activa_global = False
-                preguntando_cierre = False
-                return
-
-        # no
-        if BTN_NO_RECT:
-            x1, y1, x2, y2 = BTN_NO_RECT
-            if x1 <= x <= x2 and y1 <= y <= y2:
-                print("No seleccionado")
 
 
 def bucle_camara_hilo(app_screen=None):
     # hilo camara
-    global texto_overlay, color_overlay, camara_activa_global, preguntando_cierre
-    global BTN_YES_RECT, BTN_NO_RECT
+    global texto_overlay, color_overlay, camara_activa_global
 
     cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
@@ -55,8 +30,11 @@ def bucle_camara_hilo(app_screen=None):
             )
         return
 
-    cv2.namedWindow("LIVE")
-    cv2.setMouseCallback("LIVE", callback_raton_camara)
+    # ventana nativa posicionada a la izquierda
+    nombre_ventana = "Monitoreo de Reaccion IKA"
+    cv2.namedWindow(nombre_ventana, cv2.WINDOW_GUI_NORMAL)
+    cv2.resizeWindow(nombre_ventana, 600, 300)
+    cv2.moveWindow(nombre_ventana, 10, 30)
 
     while camara_activa_global:
         ret, frame = cap.read()
@@ -66,7 +44,6 @@ def bucle_camara_hilo(app_screen=None):
 
         # resize 600x300
         frame = cv2.resize(frame, (600, 300), interpolation=cv2.INTER_AREA)
-        h, w, _ = frame.shape
 
         # overlay texto
         if texto_overlay:
@@ -98,79 +75,7 @@ def bucle_camara_hilo(app_screen=None):
                 cv2.LINE_AA,
             )
 
-        # menu cierre
-        if preguntando_cierre:
-            box_w, box_h = 250, 55
-            box_x1 = w - box_w - 10
-            box_y1 = h - box_h - 10
-            box_x2 = w - 10
-            box_y2 = h - 10
-
-            cv2.rectangle(
-                frame, (box_x1, box_y1), (box_x2, box_y2), (0, 0, 0), -1
-            )
-            cv2.rectangle(
-                frame, (box_x1, box_y1), (box_x2, box_y2), (0, 255, 255), 1
-            )
-
-            cv2.putText(
-                frame,
-                "Deseas cerrar la camara?",
-                (box_x1 + 10, box_y1 + 18),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.38,
-                (255, 255, 255),
-                1,
-                cv2.LINE_AA,
-            )
-
-            # boton Si
-            btn_yes_x1, btn_yes_y1 = box_x1 + 85, box_y1 + 26
-            btn_yes_x2, btn_yes_y2 = box_x1 + 150, box_y1 + 48
-            BTN_YES_RECT = (btn_yes_x1, btn_yes_y1, btn_yes_x2, btn_yes_y2)
-
-            cv2.rectangle(
-                frame,
-                (btn_yes_x1, btn_yes_y1),
-                (btn_yes_x2, btn_yes_y2),
-                (0, 180, 0),
-                -1,
-            )
-            cv2.putText(
-                frame,
-                "Si",
-                (btn_yes_x1 + 22, btn_yes_y1 + 15),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.38,
-                (255, 255, 255),
-                1,
-                cv2.LINE_AA,
-            )
-
-            # boton No
-            btn_no_x1, btn_no_y1 = box_x1 + 160, box_y1 + 26
-            btn_no_x2, btn_no_y2 = box_x1 + 225, box_y1 + 48
-            BTN_NO_RECT = (btn_no_x1, btn_no_y1, btn_no_x2, btn_no_y2)
-
-            cv2.rectangle(
-                frame,
-                (btn_no_x1, btn_no_y1),
-                (btn_no_x2, btn_no_y2),
-                (0, 0, 180),
-                -1,
-            )
-            cv2.putText(
-                frame,
-                "No",
-                (btn_no_x1 + 20, btn_no_y1 + 15),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.38,
-                (255, 255, 255),
-                1,
-                cv2.LINE_AA,
-            )
-
-        cv2.imshow("Monitoreo de Reaccion IKA", frame)
+        cv2.imshow(nombre_ventana, frame)
 
         if cv2.waitKey(1) & 0xFF == ord("q"):
             camara_activa_global = False
@@ -180,7 +85,6 @@ def bucle_camara_hilo(app_screen=None):
 
     cap.release()
     cv2.destroyAllWindows()
-    preguntando_cierre = False
     camara_activa_global = False
 
     if app_screen:
@@ -273,9 +177,8 @@ async def apagar_equipo(parrilla):
 
 async def cronometro_post_reaccion(parrilla):
     # post reaccion
-    global texto_overlay, color_overlay, camara_activa_global, preguntando_cierre
+    global texto_overlay, color_overlay, camara_activa_global
     color_overlay = (0, 0, 255)
-    preguntando_cierre = True
     inicio_post = time.time()
 
     while camara_activa_global:

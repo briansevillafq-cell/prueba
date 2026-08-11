@@ -5,15 +5,13 @@ import cv2
 from ika.driver import Shaker
 
 # Variables globales compartidas
-texto_overlay = ""
+texto_overlay = "EN ESPERA"
 color_overlay = (0, 255, 0)  # Verde BGR por defecto
 camara_activa_global = False
 preguntando_cierre = False
 ultima_temp_placa = None
-INTERVALO_PARPADEO = 0.5
 
 # Coordenadas y dimensiones para la caja de diálogo táctil en la ventana OpenCV
-BOX_W, BOX_H = 440, 90
 BTN_YES_RECT = None
 BTN_NO_RECT = None
 
@@ -41,15 +39,13 @@ def callback_raton_camara(event, x, y, flags, param):
 
 
 def bucle_camara_hilo(app_screen=None):
-    """Hilo exclusivo de captura OpenCV sin bloquear el hilo principal de Kivy."""
+    """Hilo exclusivo de captura OpenCV ajustado a 491x302 px (~13x8 cm) con texto fijo."""
     global texto_overlay, color_overlay, camara_activa_global, preguntando_cierre
     global BTN_YES_RECT, BTN_NO_RECT
 
     cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
-    cap.set(cv2.CAP_PROP_FPS, 30)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
     if not cap.isOpened():
         print("Error: No se pudo abrir la cámara /dev/video0")
@@ -71,56 +67,77 @@ def bucle_camara_hilo(app_screen=None):
             time.sleep(0.01)
             continue
 
+        # Redimensionar el cuadro a exactamente ~13 cm x 8 cm (491 x 302 píxeles)
+        frame = cv2.resize(frame, (491, 302), interpolation=cv2.INTER_AREA)
         h, w, _ = frame.shape
 
-        # Overlay Superior (Progreso / Cronómetro)
+        # ======================================================================
+        # 1. OVERLAY SUPERIOR (Texto dinámico, proporcional y FIJO sin parpadeo)
+        # ======================================================================
         if texto_overlay:
-            mostrar_texto = True
-            if color_overlay == (0, 0, 255):  # Rojo parpadeante
-                if int(time.time() / INTERVALO_PARPADEO) % 2 == 0:
-                    mostrar_texto = False
+            font_scale = 0.42
+            thickness = 1
+            font = cv2.FONT_HERSHEY_SIMPLEX
 
-            if mostrar_texto:
-                cv2.rectangle(frame, (20, 20), (820, 75), (0, 0, 0), -1)
-                cv2.putText(
-                    frame,
-                    texto_overlay,
-                    (30, 58),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.7,
-                    color_overlay,
-                    2,
-                    cv2.LINE_AA,
-                )
+            # Calcular el ancho y alto del texto dinámicamente
+            (text_w, text_h), baseline = cv2.getTextSize(
+                texto_overlay, font, font_scale, thickness
+            )
 
-        # Overlay Inferior Derecho (Pregunta interactiva con botones Sí / No)
+            # Recuadro negro adaptado proporcionalmente a las dimensiones del texto
+            margin = 8
+            cv2.rectangle(
+                frame,
+                (10, 8),
+                (10 + text_w + (margin * 2), 10 + text_h + margin + 4),
+                (0, 0, 0),
+                -1,
+            )
+
+            # Dibujar el texto (SIEMPRE VISIBLE, sin parpadeo)
+            cv2.putText(
+                frame,
+                texto_overlay,
+                (10 + margin, 10 + text_h + 2),
+                font,
+                font_scale,
+                color_overlay,
+                thickness,
+                cv2.LINE_AA,
+            )
+
+        # ======================================================================
+        # 2. OVERLAY INFERIOR DERECHO (Pregunta interactiva con botones reescalados)
+        # ======================================================================
         if preguntando_cierre:
-            box_x1 = w - BOX_W - 20
-            box_y1 = h - BOX_H - 20
-            box_x2 = w - 20
-            box_y2 = h - 20
+            box_w, box_h = 240, 55
+            box_x1 = w - box_w - 10
+            box_y1 = h - box_h - 10
+            box_x2 = w - 10
+            box_y2 = h - 10
 
+            # Caja contenedora
             cv2.rectangle(
                 frame, (box_x1, box_y1), (box_x2, box_y2), (0, 0, 0), -1
             )
             cv2.rectangle(
-                frame, (box_x1, box_y1), (box_x2, box_y2), (0, 255, 255), 2
+                frame, (box_x1, box_y1), (box_x2, box_y2), (0, 255, 255), 1
             )
 
             cv2.putText(
                 frame,
                 "Deseas cerrar la camara?",
-                (box_x1 + 20, box_y1 + 32),
+                (box_x1 + 10, box_y1 + 18),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.65,
+                0.38,
                 (255, 255, 255),
                 1,
                 cv2.LINE_AA,
             )
 
             # Botón "Sí"
-            btn_yes_x1, btn_yes_y1 = box_x1 + 140, box_y1 + 45
-            btn_yes_x2, btn_yes_y2 = box_x1 + 250, box_y1 + 80
+            btn_yes_x1, btn_yes_y1 = box_x1 + 80, box_y1 + 26
+            btn_yes_x2, btn_yes_y2 = box_x1 + 145, box_y1 + 48
             BTN_YES_RECT = (btn_yes_x1, btn_yes_y1, btn_yes_x2, btn_yes_y2)
 
             cv2.rectangle(
@@ -130,27 +147,20 @@ def bucle_camara_hilo(app_screen=None):
                 (0, 180, 0),
                 -1,
             )
-            cv2.rectangle(
-                frame,
-                (btn_yes_x1, btn_yes_y1),
-                (btn_yes_x2, btn_yes_y2),
-                (255, 255, 255),
-                1,
-            )
             cv2.putText(
                 frame,
                 "Si",
-                (btn_yes_x1 + 40, btn_yes_y1 + 25),
+                (btn_yes_x1 + 22, btn_yes_y1 + 15),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.6,
+                0.38,
                 (255, 255, 255),
-                2,
+                1,
                 cv2.LINE_AA,
             )
 
             # Botón "No"
-            btn_no_x1, btn_no_y1 = box_x1 + 270, box_y1 + 45
-            btn_no_x2, btn_no_y2 = box_x1 + 380, box_y1 + 80
+            btn_no_x1, btn_no_y1 = box_x1 + 155, box_y1 + 26
+            btn_no_x2, btn_no_y2 = box_x1 + 220, box_y1 + 48
             BTN_NO_RECT = (btn_no_x1, btn_no_y1, btn_no_x2, btn_no_y2)
 
             cv2.rectangle(
@@ -160,21 +170,14 @@ def bucle_camara_hilo(app_screen=None):
                 (0, 0, 180),
                 -1,
             )
-            cv2.rectangle(
-                frame,
-                (btn_no_x1, btn_no_y1),
-                (btn_no_x2, btn_no_y2),
-                (255, 255, 255),
-                1,
-            )
             cv2.putText(
                 frame,
                 "No",
-                (btn_no_x1 + 38, btn_no_y1 + 25),
+                (btn_no_x1 + 20, btn_no_y1 + 15),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.6,
+                0.38,
                 (255, 255, 255),
-                2,
+                1,
                 cv2.LINE_AA,
             )
 
@@ -277,7 +280,7 @@ async def apagar_equipo(parrilla):
 
 async def cronometro_post_reaccion(parrilla):
     global texto_overlay, color_overlay, camara_activa_global, preguntando_cierre
-    color_overlay = (0, 0, 255)  # Rojo BGR
+    color_overlay = (0, 0, 255)  # Rojo BGR constante (FIJO)
     preguntando_cierre = True
     inicio_post = time.time()
 

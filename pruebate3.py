@@ -30,17 +30,28 @@ def bucle_camara_hilo(app_screen=None):
             )
         return
 
-    # ventana nativa posicionada a la izquierda
+    # configuracion ventana nativa
     nombre_ventana = "Monitoreo de Reaccion IKA"
     cv2.namedWindow(nombre_ventana, cv2.WINDOW_GUI_NORMAL)
     cv2.resizeWindow(nombre_ventana, 600, 300)
-    cv2.moveWindow(nombre_ventana, 10, 30)
+    
+    # forzar posicion esquina superior izquierda (0, 0)
+    cv2.moveWindow(nombre_ventana, 0, 0)
 
     while camara_activa_global:
         ret, frame = cap.read()
         if not ret:
             time.sleep(0.01)
             continue
+
+        # verificar si el usuario dio clic en la [X] del sistema para cerrar ventana
+        try:
+            if cv2.getWindowProperty(nombre_ventana, cv2.WND_PROP_VISIBLE) < 1:
+                camara_activa_global = False
+                break
+        except Exception:
+            camara_activa_global = False
+            break
 
         # resize 600x300
         frame = cv2.resize(frame, (600, 300), interpolation=cv2.INTER_AREA)
@@ -83,10 +94,12 @@ def bucle_camara_hilo(app_screen=None):
 
         time.sleep(0.005)
 
+    # limpieza de recursos al cerrar (ya sea por clic en X, tecla 'q' o boton Kivy)
     cap.release()
     cv2.destroyAllWindows()
     camara_activa_global = False
 
+    # cambiar el estado del boton Cam a gris en la interfaz Kivy
     if app_screen:
         from kivy.clock import Clock
 

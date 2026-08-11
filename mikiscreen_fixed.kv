@@ -131,114 +131,61 @@
                 pos_hint: {"x": 0.90, "y": 0.2}
 
             # =========================================================
-            # TRES INPUTS (Temperatura, RPM, Tiempo) CONTROLADOS POR CHECKBOX
+            # BARRA DE CONTROL INFERIOR REAJUSTADA
             # =========================================================
 
-            # --- 1. Temperatura ---
-            TextInput:
-                id: temp_input
-                text: "0"
-                multiline: False
-                size_hint: None, None
-                size: 80, 30
-                pos_hint: {"x": 0.48, "y": 0.04}
-                disabled: not checkyes.active
-
-            # --- 2. RPM ---
-            TextInput:
-                id: rpm_input
-                text: "0"
-                multiline: False
-                size_hint: None, None
-                size: 80, 30
-                pos_hint: {"x": 0.58, "y": 0.04}
-                disabled: not checkyes.active
-
-            # --- 3. Tiempo de Agitación ---
-            TextInput:
-                id: stir_time
-                text: "0"
-                multiline: False
-                size_hint: None, None
-                size: 80, 30
-                pos_hint: {"x": 0.68, "y": 0.04}
-                disabled: not checkyes.active
-
-            # --- Botón Cámara ---
-            Button:
-                text: "Cam"
-                id: camButton
-                size_hint: None, None
-                size: 90, 60
-                font_size: 22
-                pos_hint: {"x": 0.67, "y": 0.03}
-                background_normal: ""
-                background_color: (0.2, 0.4, 0.8, 1) if not root.camara_activa else (0.8, 0.2, 0.2, 1)
-                on_press: root.toggle_camera()
-
-            # --- Botón START ---
-            Button:
-                text: "START"
-                id: srtButton
-                size_hint: None, None
-                size: 160, 60
-                font_size: 28
-                pos_hint: {"x": 0.77, "y": 0.03}
-                on_press: root.chyorn()
-
-            # --- Botón RESET ---
+            # --- Botón RESET (Más pequeño) ---
             Button:
                 text: "RESET"
                 size_hint: None, None
-                size: 100, 50
-                font_size: 22
-                pos_hint: {"x": 0.07, "y": 0.035}
+                size: 80, 38
+                font_size: 16
+                pos_hint: {"x": 0.05, "y": 0.035}
                 on_press: root.clr_text()
+
+            # --- ToggleButtons de Modo (In-Order / Parallel más pequeños) ---
+            ToggleButton:
+                id: inorder
+                text: "In-Order"
+                group: "modo"
+                size_hint: None, None
+                size: 75, 35
+                pos: 180, 25
+                font_size: 13
+                bold: True
+                background_normal: ""
+                background_color: (0.2, 0.6, 0.3, 0.75)
+                on_state: root.set_moodWork(self)
 
             ToggleButton:
                 id: parallel
                 text: "Parallel"
                 group: "modo"
                 size_hint: None, None
-                size: 90, 45
-                pos: 320, 25
-                font_size: 18
+                size: 75, 35
+                pos: 260, 25
+                font_size: 13
                 bold: True
                 background_normal: ""
                 background_color: (0.2, 0.6, 0.3, 0.75)
                 on_state: root.set_moodWork(self)
 
-            ToggleButton:
-                id: inorder
-                text: "In-Order"
-                group: "modo"
-                size_hint: None, None
-                size: 90, 45
-                pos: 220, 25
-                font_size: 18
-                bold: True
-                background_normal: ""
-                background_color: (0.2, 0.6, 0.3, 0.75)
-                on_state: root.set_moodWork(self)
-
-            # Sección de CheckBox sustituida con "No" y "Yes"
+            # Sección CheckBox (No / Yes)
             BoxLayout:
                 orientation: 'horizontal'
                 size_hint: None, None
-                size: 120, 60
-                pos_hint: {"x": 0.365, "y": 0.03}
-                spacing: 3
+                size: 100, 50
+                pos_hint: {"x": 0.32, "y": 0.03}
+                spacing: 2
 
-                # Columna "No" (Etiqueta arriba, CheckBox abajo)
                 BoxLayout:
                     orientation: 'vertical'
                     spacing: 2
-
                     Label:
                         text: "No"
                         color: 0, 0, 0, 1
                         size_hint_y: 0.4
-
+                        font_size: 12
                     CheckBox:
                         id: checkno
                         group: "options"
@@ -247,19 +194,67 @@
                         color: (0.5, 0.5, 0.5, 1) if not self.active else (1, 1, 1, 1)
                         on_active: if self.active: root.set_stirringStage(0, True)
 
-                # Columna "Yes" (Etiqueta arriba, CheckBox abajo)
                 BoxLayout:
                     orientation: 'vertical'
                     spacing: 2
-
                     Label:
                         text: "Yes"
                         color: 0, 0, 0, 1
                         size_hint_y: 0.4
-
+                        font_size: 12
                     CheckBox:
                         id: checkyes
                         group: "options"
                         size_hint_y: 0.6
                         color: (0.5, 0.5, 0.5, 1) if not self.active else (0.2, 0.6, 1, 1)
                         on_active: if self.active: root.set_stirringStage(1, True)
+
+            # Inputs (Temperatura, RPM, Tiempo)
+            TextInput:
+                id: temp_input
+                text: "0"
+                multiline: False
+                size_hint: None, None
+                size: 65, 30
+                pos_hint: {"x": 0.42, "y": 0.04}
+                disabled: not checkyes.active
+
+            TextInput:
+                id: rpm_input
+                text: "0"
+                multiline: False
+                size_hint: None, None
+                size: 65, 30
+                pos_hint: {"x": 0.50, "y": 0.04}
+                disabled: not checkyes.active
+
+            TextInput:
+                id: stir_time
+                text: "0"
+                multiline: False
+                size_hint: None, None
+                size: 65, 30
+                pos_hint: {"x": 0.58, "y": 0.04}
+                disabled: not checkyes.active
+
+            # --- Botón Cam (Gris apagado / Verde encendido) ---
+            Button:
+                text: "Cam"
+                id: camButton
+                size_hint: None, None
+                size: 75, 45
+                font_size: 18
+                pos_hint: {"x": 0.66, "y": 0.03}
+                background_normal: ""
+                background_color: (0.2, 0.7, 0.3, 1) if root.camara_activa else (0.5, 0.5, 0.5, 1)
+                on_press: root.toggle_camera()
+
+            # --- Botón START ---
+            Button:
+                text: "START"
+                id: srtButton
+                size_hint: None, None
+                size: 130, 50
+                font_size: 24
+                pos_hint: {"x": 0.76, "y": 0.03}
+                on_press: root.chyorn()

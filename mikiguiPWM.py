@@ -17,7 +17,6 @@ from kivy.uix.popup import Popup
 from kivy.uix.textinput import TextInput
 from kivy.uix.togglebutton import ToggleButton
 
-# Importación actualizada del módulo de control y cámara
 import pruebate3
 
 Window.size = (1135, 665)
@@ -38,23 +37,23 @@ class MikiScreen(FloatLayout):
         self.usb_port = "/dev/ttyUSB0"
 
     def toggle_camera(self):
-        """Abre o cierra la cámara manualmente mediante el botón Cam."""
+        """Abre o cierra la cámara desde el botón Cam reiniciando el hilo."""
         if not self.camara_activa:
             self.camara_activa = True
             pruebate3.camara_activa_global = True
-            pruebate3.preguntando_cierre = False
-            pruebate3.texto_overlay = "Monitoreo en vivo - En espera"
+            pruebate3.texto_overlay = "EN ESPERA"
             pruebate3.color_overlay = (0, 255, 0)
+
             threading.Thread(
                 target=pruebate3.bucle_camara_hilo, args=(self,), daemon=True
             ).start()
         else:
             self.camara_activa = False
             pruebate3.camara_activa_global = False
-            pruebate3.preguntando_cierre = False
 
     def stirring(self, temp, rpm, time_wait, time_min):
         """Ejecuta la secuencia de calentamiento/agitación IKA desde pruebate3.py."""
+        self.camara_activa = True
         pruebate3.camara_activa_global = True
 
         threading.Thread(
@@ -144,14 +143,15 @@ class MikiScreen(FloatLayout):
             Color(12, 0.35, 0.2, 0.15)
             Ellipse(pos=(119, 499), size=(13, 13))
 
+        # Alineación corregida de etiquetas para la barra de control inferior
         labels = [
             ("Service Pump", (150, 300), (45, 445), 20),
             ("Vol (ml): ", (150, 3), (4.5, 400), 18),
-            ("Addition", (150, 3), (235, 85), 20),
-            ("Heat/Stir", (150, 3), (595, 85), 20),
-            ("time (min)", (150, 3), (735, 65), 16),
-            ("rpm", (150, 3), (620, 65), 16),
-            ("temp (°C)", (150, 3), (510, 65), 16),
+            ("Addition", (150, 3), (220, 80), 18),
+            ("Heat/Stir", (150, 3), (560, 80), 18),
+            ("temp (°C)", (100, 30), (480, 58), 14),
+            ("rpm", (100, 30), (560, 58), 14),
+            ("time (min)", (100, 30), (640, 58), 14),
         ]
         for text, size, pos, fsize in labels:
             self.add_widget(

@@ -14,7 +14,7 @@ def bucle_camara_hilo(app_screen=None):
     # hilo camara
     global texto_overlay, color_overlay, camara_activa_global
 
-    cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
+    cap = cv2.VideoCapture(0)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
@@ -92,6 +92,8 @@ def bucle_camara_hilo(app_screen=None):
     cap.release()
     cv2.destroyAllWindows()
     cv2.waitKey(1)
+    del cap
+    time.sleep(0.5)
     camara_activa_global = False
 
     # cambiar el estado del boton Cam a gris en la interfaz Kivy

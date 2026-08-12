@@ -14,7 +14,7 @@ def bucle_camara_hilo(app_screen=None):
     # hilo camara
     global texto_overlay, color_overlay, camara_activa_global
 
-    cap = cv2.VideoCapture("/dev/video0", cv2.CAP_V4L2)
+    cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
     ret = False
     
     if cap.isOpened():
@@ -23,7 +23,7 @@ def bucle_camara_hilo(app_screen=None):
     if not cap.isOpened() or not ret:
         if cap is not None:
             cap.release()
-        cap = cv2.VideoCapture("/dev/video1", cv2.CAP_V4L2)
+        cap = cv2.VideoCapture(1, cv2.CAP_V4L2)
 
     if not cap.isOpened():
         print("Error camara")

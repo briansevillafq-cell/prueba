@@ -14,18 +14,30 @@ def bucle_camara_hilo(app_screen=None):
     # hilo camara
     global texto_overlay, color_overlay, camara_activa_global
 
-    cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
-    ret = False
-    
-    if cap.isOpened():
-        ret, _ = cap.read()
-        
-    if not cap.isOpened() or not ret:
-        if cap is not None:
-            cap.release()
-        cap = cv2.VideoCapture(1, cv2.CAP_V4L2)
+    cap = None
+    # Probamos los puertos 0 y 1 asegurando el tiempo de calentamiento
+    for puerto in [0, 1]:
+        temp_cap = cv2.VideoCapture(puerto, cv2.CAP_V4L2)
+        if temp_cap.isOpened():
+            temp_cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            temp_cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            time.sleep(0.5)  # Da tiempo a la Logitech Brio de encender
+            
+            camara_lista = False
+            for _ in range(5):
+                ret, _ = temp_cap.read()
+                if ret:
+                    camara_lista = True
+                    break
+                time.sleep(0.1)
+                
+            if camara_lista:
+                cap = temp_cap
+                break
+            else:
+                temp_cap.release()
 
-    if not cap.isOpened():
+    if cap is None:
         print("Error camara")
         camara_activa_global = False
         if app_screen:
@@ -35,11 +47,6 @@ def bucle_camara_hilo(app_screen=None):
                 lambda dt: setattr(app_screen, "camara_activa", False)
             )
         return
-
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-    
-    time.sleep(0.5)
 
     try:
         nombre_ventana = "Monitoreo de Reaccion IKA"

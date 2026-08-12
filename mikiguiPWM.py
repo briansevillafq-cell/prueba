@@ -22,6 +22,7 @@ Window.size = (1135, 665)
 Window.resizable = False
 Window.title = "MIK-I"
 
+
 class MikiScreen(FloatLayout):
 
     camara_activa = BooleanProperty(False)
@@ -34,12 +35,34 @@ class MikiScreen(FloatLayout):
         self.used_pines = {}
         self.usb_port = "/dev/ttyUSB0"
 
+        # Evita que un mismo clic/evento de CAM se procese dos veces
+        self._ultimo_toggle_camara = 0.0
+
     def toggle_camera(self):
-        # Si la cámara está funcionando, solicitar su cierre
+        # --------------------------------------------------
+        # Evitar doble ejecución del mismo clic/evento
+        # --------------------------------------------------
+        ahora = time.monotonic()
+
+        if ahora - self._ultimo_toggle_camara < 0.8:
+            print("[CAM UI] Evento duplicado ignorado")
+            return
+
+        self._ultimo_toggle_camara = ahora
+
+        # --------------------------------------------------
+        # Si la cámara está encendida -> apagar
+        # --------------------------------------------------
         if pruebate3.camara_activa_global:
+            print("[CAM UI] Apagando cámara")
             pruebate3.detener_camara()
             self.camara_activa = False
             return
+
+        # --------------------------------------------------
+        # Si la cámara está apagada -> encender
+        # --------------------------------------------------
+        print("[CAM UI] Encendiendo cámara")
 
         pruebate3.texto_overlay = "EN ESPERA"
         pruebate3.color_overlay = (0, 255, 0)
@@ -52,9 +75,19 @@ class MikiScreen(FloatLayout):
     def stirring(self, temp, rpm, time_wait, time_min):
         """Ejecuta IKA desde pruebate3.py."""
 
-        # Inicia la cámara solamente si todavía no existe
-        # un hilo de cámara activo.
-        pruebate3.iniciar_camara(self)
+        # Iniciar cámara solamente si realmente no existe
+        # ningún hilo de cámara funcionando o cerrándose.
+        hilo_cam = pruebate3.hilo_camara_global
+
+        if (
+            not pruebate3.camara_activa_global
+            and (
+                hilo_cam is None
+                or not hilo_cam.is_alive()
+            )
+        ):
+            pruebate3.iniciar_camara(self)
+
         self.camara_activa = pruebate3.camara_activa_global
 
         def run_async():
@@ -62,17 +95,11 @@ class MikiScreen(FloatLayout):
             asyncio.set_event_loop(loop)
             loop.run_until_complete(
                 pruebate3.ejecutar_parrilla(
-                    self.usb_port,
-                    temp,
-                    rpm,
-                    time_min
+                    self.usb_port, temp, rpm, time_min
                 )
             )
 
-        threading.Thread(
-            target=run_async,
-            daemon=True
-        ).start()
+        threading.Thread(target=run_async, daemon=True).start()
 
     def update_interface(self, result):
         print(f"Principal thread running: {result}")
@@ -81,20 +108,11 @@ class MikiScreen(FloatLayout):
         for i in range(4):
             with self.canvas:
                 Color(0, 0, 0, 1)
-                Ellipse(
-                    pos=(259 + 220 * i, 430),
-                    size=(150, 152)
-                )
+                Ellipse(pos=(259 + 220 * i, 430), size=(150, 152))
                 Color(0, 194, 0, 0.6)
-                Ellipse(
-                    pos=(260 + 220 * i, 432),
-                    size=(148, 148)
-                )
+                Ellipse(pos=(260 + 220 * i, 432), size=(148, 148))
                 Color(3, 0.55, 8, 0.63)
-                Ellipse(
-                    pos=(326 + 221 * i, 499),
-                    size=(13, 13)
-                )
+                Ellipse(pos=(326 + 221 * i, 499), size=(13, 13))
 
             self.add_widget(
                 Label(
@@ -124,20 +142,11 @@ class MikiScreen(FloatLayout):
 
             with self.canvas:
                 Color(0, 0, 0, 1)
-                Ellipse(
-                    pos=(x + 24, y + 5),
-                    size=(150, 152)
-                )
+                Ellipse(pos=(x + 24, y + 5), size=(150, 152))
                 Color(0, 194, 0, 0.6)
-                Ellipse(
-                    pos=(x + 25, y + 7),
-                    size=(148, 148)
-                )
+                Ellipse(pos=(x + 25, y + 7), size=(148, 148))
                 Color(3, 0.55, 8, 0.63)
-                Ellipse(
-                    pos=(x + 92, y + 73),
-                    size=(13, 13)
-                )
+                Ellipse(pos=(x + 92, y + 73), size=(13, 13))
 
             self.add_widget(
                 Label(
@@ -163,20 +172,11 @@ class MikiScreen(FloatLayout):
 
         with self.canvas:
             Color(0, 0, 0, 1)
-            Ellipse(
-                pos=(49, 428),
-                size=(150, 152)
-            )
+            Ellipse(pos=(49, 428), size=(150, 152))
             Color(1, 1, 5, 0.95)
-            Ellipse(
-                pos=(50, 430),
-                size=(148, 148)
-            )
+            Ellipse(pos=(50, 430), size=(148, 148))
             Color(12, 0.35, 0.2, 0.15)
-            Ellipse(
-                pos=(119, 499),
-                size=(13, 13)
-            )
+            Ellipse(pos=(119, 499), size=(13, 13))
 
         labels = [
             ("Service Pump", (150, 300), (45, 445), 20),
@@ -748,6 +748,7 @@ class MikiScreen(FloatLayout):
 
         confirm_popup.open()
 
+
 class MikiApp(App):
 
     def build(self):
@@ -756,6 +757,7 @@ class MikiApp(App):
         )
 
         return MikiScreen()
+
 
 if __name__ == "__main__":
     MikiApp().run()

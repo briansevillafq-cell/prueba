@@ -4,7 +4,6 @@ import time
 import cv2
 from ika.driver import Shaker
 
-# variables globales
 texto_overlay = "EN ESPERA"
 color_overlay = (0, 255, 0)
 camara_activa_global = False
@@ -30,12 +29,10 @@ def bucle_camara_hilo(app_screen=None):
             )
         return
 
-    # configuracion ventana nativa
     nombre_ventana = "Monitoreo de Reaccion IKA"
     cv2.namedWindow(nombre_ventana, cv2.WINDOW_GUI_NORMAL)
     cv2.resizeWindow(nombre_ventana, 600, 300)
     
-    # forzar posicion esquina superior izquierda (0, 0)
     cv2.moveWindow(nombre_ventana, 0, 0)
 
     while camara_activa_global:
@@ -44,7 +41,6 @@ def bucle_camara_hilo(app_screen=None):
             time.sleep(0.01)
             continue
 
-        # verificar si el usuario dio clic en la [X] del sistema para cerrar ventana
         try:
             if cv2.getWindowProperty(nombre_ventana, cv2.WND_PROP_VISIBLE) < 1:
                 camara_activa_global = False
@@ -53,10 +49,8 @@ def bucle_camara_hilo(app_screen=None):
             camara_activa_global = False
             break
 
-        # resize 600x300
         frame = cv2.resize(frame, (600, 300), interpolation=cv2.INTER_AREA)
 
-        # overlay texto
         if texto_overlay:
             font_scale = 0.45
             thickness = 1

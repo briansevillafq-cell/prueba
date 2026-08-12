@@ -91,6 +91,7 @@ def bucle_camara_hilo(app_screen=None):
     # limpieza de recursos al cerrar (ya sea por clic en X, tecla 'q' o boton Kivy)
     cap.release()
     cv2.destroyAllWindows()
+    cv2.waitKey(1)
     camara_activa_global = False
 
     # cambiar el estado del boton Cam a gris en la interfaz Kivy

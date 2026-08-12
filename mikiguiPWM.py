@@ -35,39 +35,44 @@ class MikiScreen(FloatLayout):
         self.usb_port = "/dev/ttyUSB0"
 
     def toggle_camera(self):
-        if not pruebate3.camara_activa_global:
-            pruebate3.camara_activa_global = True
-            pruebate3.texto_overlay = "EN ESPERA"
-            pruebate3.color_overlay = (0, 255, 0)
-            self.camara_activa = True
-
-            threading.Thread(
-                target=pruebate3.bucle_camara_hilo, args=(self,), daemon=True
-            ).start()
-        else:
-            # Apagado manual desde el botón Kivy
-            pruebate3.camara_activa_global = False
+        # Si la cámara está funcionando, solicitar su cierre
+        if pruebate3.camara_activa_global:
+            pruebate3.detener_camara()
             self.camara_activa = False
+            return
+
+        pruebate3.texto_overlay = "EN ESPERA"
+        pruebate3.color_overlay = (0, 255, 0)
+
+        iniciada = pruebate3.iniciar_camara(self)
+
+        if iniciada:
+            self.camara_activa = True
 
     def stirring(self, temp, rpm, time_wait, time_min):
         """Ejecuta IKA desde pruebate3.py."""
-        self.camara_activa = True
-        pruebate3.camara_activa_global = True
 
-        threading.Thread(
-            target=pruebate3.bucle_camara_hilo, args=(self,), daemon=True
-        ).start()
+        # Inicia la cámara solamente si todavía no existe
+        # un hilo de cámara activo.
+        pruebate3.iniciar_camara(self)
+        self.camara_activa = pruebate3.camara_activa_global
 
         def run_async():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             loop.run_until_complete(
                 pruebate3.ejecutar_parrilla(
-                    self.usb_port, temp, rpm, time_min
+                    self.usb_port,
+                    temp,
+                    rpm,
+                    time_min
                 )
             )
 
-        threading.Thread(target=run_async, daemon=True).start()
+        threading.Thread(
+            target=run_async,
+            daemon=True
+        ).start()
 
     def update_interface(self, result):
         print(f"Principal thread running: {result}")
@@ -76,11 +81,21 @@ class MikiScreen(FloatLayout):
         for i in range(4):
             with self.canvas:
                 Color(0, 0, 0, 1)
-                Ellipse(pos=(259 + 220 * i, 430), size=(150, 152))
+                Ellipse(
+                    pos=(259 + 220 * i, 430),
+                    size=(150, 152)
+                )
                 Color(0, 194, 0, 0.6)
-                Ellipse(pos=(260 + 220 * i, 432), size=(148, 148))
+                Ellipse(
+                    pos=(260 + 220 * i, 432),
+                    size=(148, 148)
+                )
                 Color(3, 0.55, 8, 0.63)
-                Ellipse(pos=(326 + 221 * i, 499), size=(13, 13))
+                Ellipse(
+                    pos=(326 + 221 * i, 499),
+                    size=(13, 13)
+                )
+
             self.add_widget(
                 Label(
                     text=f"Pump {i + 1}",
@@ -91,6 +106,7 @@ class MikiScreen(FloatLayout):
                     font_size=20,
                 )
             )
+
             self.add_widget(
                 Label(
                     text="Vol (ml): ",
@@ -105,13 +121,24 @@ class MikiScreen(FloatLayout):
         for j in range(5):
             x = 110 + 203 * j
             y = 170
+
             with self.canvas:
                 Color(0, 0, 0, 1)
-                Ellipse(pos=(x + 24, y + 5), size=(150, 152))
+                Ellipse(
+                    pos=(x + 24, y + 5),
+                    size=(150, 152)
+                )
                 Color(0, 194, 0, 0.6)
-                Ellipse(pos=(x + 25, y + 7), size=(148, 148))
+                Ellipse(
+                    pos=(x + 25, y + 7),
+                    size=(148, 148)
+                )
                 Color(3, 0.55, 8, 0.63)
-                Ellipse(pos=(x + 92, y + 73), size=(13, 13))
+                Ellipse(
+                    pos=(x + 92, y + 73),
+                    size=(13, 13)
+                )
+
             self.add_widget(
                 Label(
                     text=f"Pump {j + 5}",
@@ -122,6 +149,7 @@ class MikiScreen(FloatLayout):
                     font_size=20,
                 )
             )
+
             self.add_widget(
                 Label(
                     text="Vol (ml): ",
@@ -135,11 +163,20 @@ class MikiScreen(FloatLayout):
 
         with self.canvas:
             Color(0, 0, 0, 1)
-            Ellipse(pos=(49, 428), size=(150, 152))
+            Ellipse(
+                pos=(49, 428),
+                size=(150, 152)
+            )
             Color(1, 1, 5, 0.95)
-            Ellipse(pos=(50, 430), size=(148, 148))
+            Ellipse(
+                pos=(50, 430),
+                size=(148, 148)
+            )
             Color(12, 0.35, 0.2, 0.15)
-            Ellipse(pos=(119, 499), size=(13, 13))
+            Ellipse(
+                pos=(119, 499),
+                size=(13, 13)
+            )
 
         labels = [
             ("Service Pump", (150, 300), (45, 445), 20),
@@ -150,6 +187,7 @@ class MikiScreen(FloatLayout):
             ("rpm", (100, 30), (560, 58), 14),
             ("time (min)", (100, 30), (640, 58), 14),
         ]
+
         for text, size, pos, fsize in labels:
             self.add_widget(
                 Label(
@@ -178,9 +216,12 @@ class MikiScreen(FloatLayout):
             self.ids.inorder,
         ]:
             n.state = "normal"
+
         self.selection_mood = ""
+
         for i in range(10):
             self.ids[f"vol{i}"].text = "0"
+
         self.ids.temp_input.text = "0"
         self.ids.rpm_input.text = "0"
         self.ids.stir_time.text = "0"
@@ -189,24 +230,47 @@ class MikiScreen(FloatLayout):
     def reaction_finished(self):
         popup = Popup(
             title="Info",
-            content=Label(text="Reaction finished", font_size=18),
+            content=Label(
+                text="Reaction finished",
+                font_size=18
+            ),
             size_hint=(None, None),
             size=(300, 150),
         )
-        popup.open()
-        Clock.schedule_once(lambda dt: self.ask_clean_tubes(), 5)
 
-    def ask_clean_tubes(self):
-        layout = BoxLayout(orientation="vertical", spacing=10, padding=10)
-        layout.add_widget(
-            Label(text="Do you want to clean the tubes?", font_size=18)
+        popup.open()
+
+        Clock.schedule_once(
+            lambda dt: self.ask_clean_tubes(),
+            5
         )
 
-        btn_layout = BoxLayout(spacing=10, size_hint_y=None, height=40)
+    def ask_clean_tubes(self):
+        layout = BoxLayout(
+            orientation="vertical",
+            spacing=10,
+            padding=10
+        )
+
+        layout.add_widget(
+            Label(
+                text="Do you want to clean the tubes?",
+                font_size=18
+            )
+        )
+
+        btn_layout = BoxLayout(
+            spacing=10,
+            size_hint_y=None,
+            height=40
+        )
+
         btn_yes = Button(text="Yes")
         btn_no = Button(text="No")
+
         btn_layout.add_widget(btn_yes)
         btn_layout.add_widget(btn_no)
+
         layout.add_widget(btn_layout)
 
         popup = Popup(
@@ -230,8 +294,15 @@ class MikiScreen(FloatLayout):
                 4: 0.22,
                 7: 0.22,
             }
+
             popup.dismiss()
-            cleanUp(True, self.used_pines, self.flow)
+
+            cleanUp(
+                True,
+                self.used_pines,
+                self.flow
+            )
+
             self.ids.srtButton.disabled = False
 
         def on_no(instance):
@@ -240,11 +311,39 @@ class MikiScreen(FloatLayout):
 
         btn_yes.bind(on_release=on_yes)
         btn_no.bind(on_release=on_no)
+
         popup.open()
 
     def rxnY(self, *args):
-        self.pps = [14, 17, 27, 22, 13, 2, 18, 25, 4, 7]
-        self.strpins = [15, 23, 5, 6, 26, 16, 20, 21, 1, 8, 24, 12]
+
+        self.pps = [
+            14,
+            17,
+            27,
+            22,
+            13,
+            2,
+            18,
+            25,
+            4,
+            7
+        ]
+
+        self.strpins = [
+            15,
+            23,
+            5,
+            6,
+            26,
+            16,
+            20,
+            21,
+            1,
+            8,
+            24,
+            12
+        ]
+
         self.flow = {
             14: 28,
             17: 0.2481,
@@ -257,58 +356,108 @@ class MikiScreen(FloatLayout):
             4: 0.2290,
             7: 0.2290,
         }
-        self.tc = [2, 16, 17, 18, 17, 18, 17, 18, 19, 18]
+
+        self.tc = [
+            2,
+            16,
+            17,
+            18,
+            17,
+            18,
+            17,
+            18,
+            19,
+            18
+        ]
+
         self.used_pines = {}
 
         def wmk():
+
             self.tempstr = (
                 int(self.ids.temp_input.text)
                 if self.ids.temp_input.text.strip()
                 else 0
             )
+
             self.rpmstr = (
                 int(self.ids.rpm_input.text)
                 if self.ids.rpm_input.text.strip()
                 else 0
             )
+
             self.tmstr = (
                 int(self.ids.stir_time.text)
                 if self.ids.stir_time.text.strip()
                 else 0
             )
+
             self.vs = (
-                int(self.ids.vol0.text) if self.ids.vol0.text.strip() else 0
-            )
-            self.v1 = (
-                int(self.ids.vol1.text) if self.ids.vol1.text.strip() else 0
-            )
-            self.v2 = (
-                int(self.ids.vol2.text) if self.ids.vol2.text.strip() else 0
-            )
-            self.v3 = (
-                int(self.ids.vol3.text) if self.ids.vol3.text.strip() else 0
-            )
-            self.v4 = (
-                int(self.ids.vol4.text) if self.ids.vol4.text.strip() else 0
-            )
-            self.v5 = (
-                int(self.ids.vol5.text) if self.ids.vol5.text.strip() else 0
-            )
-            self.v6 = (
-                int(self.ids.vol6.text) if self.ids.vol6.text.strip() else 0
-            )
-            self.v7 = (
-                int(self.ids.vol7.text) if self.ids.vol7.text.strip() else 0
-            )
-            self.v8 = (
-                int(self.ids.vol8.text) if self.ids.vol8.text.strip() else 0
-            )
-            self.v9 = (
-                int(self.ids.vol9.text) if self.ids.vol9.text.strip() else 0
+                int(self.ids.vol0.text)
+                if self.ids.vol0.text.strip()
+                else 0
             )
 
-            t_wait = (self.v1 / self.flow[self.pps[1]] + self.tc[1]) + (
-                self.v2 / self.flow[self.pps[2]] + self.tc[2]
+            self.v1 = (
+                int(self.ids.vol1.text)
+                if self.ids.vol1.text.strip()
+                else 0
+            )
+
+            self.v2 = (
+                int(self.ids.vol2.text)
+                if self.ids.vol2.text.strip()
+                else 0
+            )
+
+            self.v3 = (
+                int(self.ids.vol3.text)
+                if self.ids.vol3.text.strip()
+                else 0
+            )
+
+            self.v4 = (
+                int(self.ids.vol4.text)
+                if self.ids.vol4.text.strip()
+                else 0
+            )
+
+            self.v5 = (
+                int(self.ids.vol5.text)
+                if self.ids.vol5.text.strip()
+                else 0
+            )
+
+            self.v6 = (
+                int(self.ids.vol6.text)
+                if self.ids.vol6.text.strip()
+                else 0
+            )
+
+            self.v7 = (
+                int(self.ids.vol7.text)
+                if self.ids.vol7.text.strip()
+                else 0
+            )
+
+            self.v8 = (
+                int(self.ids.vol8.text)
+                if self.ids.vol8.text.strip()
+                else 0
+            )
+
+            self.v9 = (
+                int(self.ids.vol9.text)
+                if self.ids.vol9.text.strip()
+                else 0
+            )
+
+            t_wait = (
+                self.v1 / self.flow[self.pps[1]]
+                + self.tc[1]
+            ) + (
+                self.v2 / self.flow[self.pps[2]]
+                + self.tc[2]
             )
 
             def stir1():
@@ -326,9 +475,14 @@ class MikiScreen(FloatLayout):
                         0,
                         int(self.pps[0]),
                         int(self.strpins[0]),
-                        self.vs / self.flow[self.pps[0]] + self.tc[0],
+                        self.vs / self.flow[self.pps[0]]
+                        + self.tc[0],
                     )
-                    self.used_pines[0] = self.pps[0], self.strpins[0]
+
+                    self.used_pines[0] = (
+                        self.pps[0],
+                        self.strpins[0]
+                    )
 
             def Pmp1():
                 if self.v1 != 0:
@@ -336,9 +490,17 @@ class MikiScreen(FloatLayout):
                         1,
                         int(self.pps[1]),
                         int(self.strpins[1]),
-                        (self.v1 / self.flow[self.pps[1]]) + self.tc[1],
+                        (
+                            self.v1
+                            / self.flow[self.pps[1]]
+                        )
+                        + self.tc[1],
                     )
-                    self.used_pines[1] = self.pps[1], self.strpins[1]
+
+                    self.used_pines[1] = (
+                        self.pps[1],
+                        self.strpins[1]
+                    )
 
             def Pmp2():
                 if self.v2 != 0:
@@ -346,9 +508,17 @@ class MikiScreen(FloatLayout):
                         2,
                         int(self.pps[2]),
                         int(self.strpins[2]),
-                        (self.v2 / self.flow[self.pps[2]]) + self.tc[2],
+                        (
+                            self.v2
+                            / self.flow[self.pps[2]]
+                        )
+                        + self.tc[2],
                     )
-                    self.used_pines[2] = self.pps[2], self.strpins[2]
+
+                    self.used_pines[2] = (
+                        self.pps[2],
+                        self.strpins[2]
+                    )
 
             def Pmp2TD():
                 if self.v2 != 0:
@@ -356,18 +526,40 @@ class MikiScreen(FloatLayout):
                         2,
                         int(self.pps[2]),
                         int(self.strpins[2]),
-                        self.v1 / self.flow[self.pps[1]],
-                        self.v2 / self.flow[self.pps[2]] + self.tc[2],
+                        self.v1
+                        / self.flow[self.pps[1]],
+                        self.v2
+                        / self.flow[self.pps[2]]
+                        + self.tc[2],
                     )
-                    self.used_pines[2] = self.pps[2], self.strpins[2]
 
-            hilo_ms1 = threading.Thread(target=stir1)
-            hilo_s = threading.Thread(target=Pmps)
-            hilo_1 = threading.Thread(target=Pmp1)
-            hilo_2 = threading.Thread(target=Pmp2)
-            h_2 = threading.Thread(target=Pmp2TD)
+                    self.used_pines[2] = (
+                        self.pps[2],
+                        self.strpins[2]
+                    )
+
+            hilo_ms1 = threading.Thread(
+                target=stir1
+            )
+
+            hilo_s = threading.Thread(
+                target=Pmps
+            )
+
+            hilo_1 = threading.Thread(
+                target=Pmp1
+            )
+
+            hilo_2 = threading.Thread(
+                target=Pmp2
+            )
+
+            h_2 = threading.Thread(
+                target=Pmp2TD
+            )
 
             if self.selection_mood == "Parallel":
+
                 hilo_s.start()
                 hilo_ms1.start()
                 hilo_1.start()
@@ -377,14 +569,20 @@ class MikiScreen(FloatLayout):
                 hilo_ms1.join()
                 hilo_1.join()
                 hilo_2.join()
+
                 self.reaction_finished()
 
             elif self.selection_mood == "In-Order":
+
                 if self.stir_stage == 0:
+
                     Pmp1()
                     Pmp2()
+
                     self.reaction_finished()
+
                 elif self.stir_stage == 1:
+
                     hilo_1.start()
                     h_2.start()
                     hilo_ms1.start()
@@ -392,85 +590,172 @@ class MikiScreen(FloatLayout):
                     hilo_1.join()
                     h_2.join()
                     hilo_ms1.join()
+
                     self.reaction_finished()
 
         confirm_popup = Popup(
-            title="CONFIRM", size_hint=(None, None), size=(300, 200)
+            title="CONFIRM",
+            size_hint=(None, None),
+            size=(300, 200)
         )
-        content = BoxLayout(orientation="vertical")
+
+        content = BoxLayout(
+            orientation="vertical"
+        )
+
         content.add_widget(
             Label(
-                text="Do you want to start the reaction?", font_size=18
+                text="Do you want to start the reaction?",
+                font_size=18
             )
         )
-        buttons = BoxLayout(size_hint_y=0.4)
-        yes_btn = Button(text="YES")
-        no_btn = Button(text="NO")
-        yes_btn.bind(on_press=lambda x: [confirm_popup.dismiss(), wmk()])
-        no_btn.bind(on_press=lambda x: [confirm_popup.dismiss()])
-        buttons.add_widget(yes_btn)
-        buttons.add_widget(no_btn)
-        content.add_widget(buttons)
+
+        buttons = BoxLayout(
+            size_hint_y=0.4
+        )
+
+        yes_btn = Button(
+            text="YES"
+        )
+
+        no_btn = Button(
+            text="NO"
+        )
+
+        yes_btn.bind(
+            on_press=lambda x: [
+                confirm_popup.dismiss(),
+                wmk()
+            ]
+        )
+
+        no_btn.bind(
+            on_press=lambda x: [
+                confirm_popup.dismiss()
+            ]
+        )
+
+        buttons.add_widget(
+            yes_btn
+        )
+
+        buttons.add_widget(
+            no_btn
+        )
+
+        content.add_widget(
+            buttons
+        )
+
         confirm_popup.content = content
+
         confirm_popup.open()
 
     def rxnN(self, *args):
         self.rxnY(*args)
 
     def chyorn(self):
+
         if self.selection_mood == "":
             Popup(
                 title="Error",
-                content=Label(text="Select the addition!", font_size=18),
-                size_hint=(None, None),
-                size=(300, 150),
-            ).open()
-            return
-
-        try:
-            self.volumes = [
-                int(self.ids[f"vol{i}"].text) for i in range(10)
-            ]
-        except ValueError:
-            Popup(
-                title="Error",
                 content=Label(
-                    text="Only numbers allowed in volumes!", font_size=18
+                    text="Select the addition!",
+                    font_size=18
                 ),
                 size_hint=(None, None),
                 size=(300, 150),
             ).open()
+
+            return
+
+        try:
+            self.volumes = [
+                int(self.ids[f"vol{i}"].text)
+                for i in range(10)
+            ]
+
+        except ValueError:
+
+            Popup(
+                title="Error",
+                content=Label(
+                    text="Only numbers allowed in volumes!",
+                    font_size=18
+                ),
+                size_hint=(None, None),
+                size=(300, 150),
+            ).open()
+
             return
 
         confirm_popup = Popup(
-            title="CONFIRM", size_hint=(None, None), size=(300, 200)
+            title="CONFIRM",
+            size_hint=(None, None),
+            size=(300, 200)
         )
-        content = BoxLayout(orientation="vertical")
-        content.add_widget(
-            Label(text="Consider the load time?", font_size=18)
-        )
-        buttons = BoxLayout(size_hint_y=0.4)
-        yes_btn = Button(text="YES")
-        no_btn = Button(text="NO")
-        yes_btn.bind(
-            on_press=lambda x: [confirm_popup.dismiss(), self.rxnY()]
-        )
-        no_btn.bind(
-            on_press=lambda x: [confirm_popup.dismiss(), self.rxnN()]
-        )
-        buttons.add_widget(yes_btn)
-        buttons.add_widget(no_btn)
-        content.add_widget(buttons)
-        confirm_popup.content = content
-        confirm_popup.open()
 
+        content = BoxLayout(
+            orientation="vertical"
+        )
+
+        content.add_widget(
+            Label(
+                text="Consider the load time?",
+                font_size=18
+            )
+        )
+
+        buttons = BoxLayout(
+            size_hint_y=0.4
+        )
+
+        yes_btn = Button(
+            text="YES"
+        )
+
+        no_btn = Button(
+            text="NO"
+        )
+
+        yes_btn.bind(
+            on_press=lambda x: [
+                confirm_popup.dismiss(),
+                self.rxnY()
+            ]
+        )
+
+        no_btn.bind(
+            on_press=lambda x: [
+                confirm_popup.dismiss(),
+                self.rxnN()
+            ]
+        )
+
+        buttons.add_widget(
+            yes_btn
+        )
+
+        buttons.add_widget(
+            no_btn
+        )
+
+        content.add_widget(
+            buttons
+        )
+
+        confirm_popup.content = content
+
+        confirm_popup.open()
 
 class MikiApp(App):
 
     def build(self):
-        Builder.load_file("mikiscreen_fixed.kv")
-        return MikiScreen()
+        Builder.load_file(
+            "mikiscreen_fixed.kv"
+        )
 
+        return MikiScreen()
 
 if __name__ == "__main__":
     MikiApp().run()

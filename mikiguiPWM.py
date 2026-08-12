@@ -35,7 +35,6 @@ class MikiScreen(FloatLayout):
         self.usb_port = "/dev/ttyUSB0"
 
     def toggle_camera(self):
-        """Conmuta la cámara permitiendo abrir/cerrar múltiples veces sin importar cómo se cerró."""
         if not pruebate3.camara_activa_global:
             # Reiniciar variables globales e iniciar hilo
             pruebate3.camara_activa_global = True
@@ -52,7 +51,7 @@ class MikiScreen(FloatLayout):
             self.camara_activa = False
 
     def stirring(self, temp, rpm, time_wait, time_min):
-        """Ejecuta la secuencia de calentamiento/agitación IKA desde pruebate3.py."""
+        """Ejecuta IKA desde pruebate3.py."""
         self.camara_activa = True
         pruebate3.camara_activa_global = True
 

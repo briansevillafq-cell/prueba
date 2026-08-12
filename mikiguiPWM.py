@@ -36,7 +36,6 @@ class MikiScreen(FloatLayout):
 
     def toggle_camera(self):
         if not pruebate3.camara_activa_global:
-            # Reiniciar variables globales e iniciar hilo
             pruebate3.camara_activa_global = True
             pruebate3.texto_overlay = "EN ESPERA"
             pruebate3.color_overlay = (0, 255, 0)

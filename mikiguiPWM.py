@@ -1,6 +1,7 @@
 import asyncio
 import threading
 import time
+import pruebate3
 
 from actuarsPWM import cleanUp, pumpsWork, pumpsWorkTC
 from kivy.app import App
@@ -17,12 +18,9 @@ from kivy.uix.popup import Popup
 from kivy.uix.textinput import TextInput
 from kivy.uix.togglebutton import ToggleButton
 
-import pruebate3
-
 Window.size = (1135, 665)
 Window.resizable = False
 Window.title = "MIK-I"
-
 
 class MikiScreen(FloatLayout):
 
@@ -37,19 +35,21 @@ class MikiScreen(FloatLayout):
         self.usb_port = "/dev/ttyUSB0"
 
     def toggle_camera(self):
-        """Abre o cierra la cámara desde el botón Cam reiniciando el hilo."""
-        if not self.camara_activa:
-            self.camara_activa = True
+        """Conmuta la cámara permitiendo abrir/cerrar múltiples veces sin importar cómo se cerró."""
+        if not pruebate3.camara_activa_global:
+            # Reiniciar variables globales e iniciar hilo
             pruebate3.camara_activa_global = True
             pruebate3.texto_overlay = "EN ESPERA"
             pruebate3.color_overlay = (0, 255, 0)
+            self.camara_activa = True
 
             threading.Thread(
                 target=pruebate3.bucle_camara_hilo, args=(self,), daemon=True
             ).start()
         else:
-            self.camara_activa = False
+            # Apagado manual desde el botón Kivy
             pruebate3.camara_activa_global = False
+            self.camara_activa = False
 
     def stirring(self, temp, rpm, time_wait, time_min):
         """Ejecuta la secuencia de calentamiento/agitación IKA desde pruebate3.py."""
@@ -143,7 +143,6 @@ class MikiScreen(FloatLayout):
             Color(12, 0.35, 0.2, 0.15)
             Ellipse(pos=(119, 499), size=(13, 13))
 
-        # Alineación corregida de etiquetas para la barra de control inferior
         labels = [
             ("Service Pump", (150, 300), (45, 445), 20),
             ("Vol (ml): ", (150, 3), (4.5, 400), 18),

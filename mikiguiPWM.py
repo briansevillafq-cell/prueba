@@ -2,7 +2,6 @@ import asyncio
 import threading
 import time
 import pruebate3
-import RPi.GPIO as GPIO
 
 from actuars import cleanUp, pumpsWork, pumpsWorkTC
 from kivy.app import App
@@ -486,27 +485,22 @@ class MikiScreen(FloatLayout):
                 hilo_7.join()
                 hilo_8.join()
                 hilo_9.join()
-                GPIO.cleanup()
                 self.reaction_finished()
             elif self.selection_mood == "In-Order":
                 if self.stir_stage == 0:
                     Pmp1(); Pmp2(); Pmp3(); Pmp4(); Pmp5(); Pmp6(); Pmp7(); Pmp8(); Pmp9()
-                    GPIO.cleanup()
                     self.reaction_finished()
                 elif self.stir_stage == 1:
                     hilo_1.start(); h_2.start(); hilo_ms1.start(); h_3.start(); h_4.start(); h_5.start(); h_6.start(); h_7.start(); h_8.start(); h_9.start()
                     hilo_1.join(); h_2.join(); hilo_ms1.join(); h_3.join(); h_4.join(); h_5.join(); h_6.join(); h_7.join(); h_8.join(); h_9.join()
-                    GPIO.cleanup()
                     self.reaction_finished()
                 elif self.stir_stage == 2:
                     Pmp1(); hilo_ms2.start(); h_2.start(); h_3.start(); h_4.start(); h_5.start(); h_6.start(); h_7.start(); h_8.start(); h_9.start()
                     hilo_ms2.join(); h_2.join(); h_3.join(); h_4.join(); h_5.join(); h_6.join(); h_7.join(); h_8.join(); h_9.join()
-                    GPIO.cleanup()
                     self.reaction_finished()
                 elif self.stir_stage == 3:
                     Pmp1(); Pmp2(); hilo_ms3.start(); h_3.start(); h_4.start(); h_5.start(); h_6.start(); h_7.start(); h_8.start(); h_9.start()
                     hilo_ms3.join(); h_3.join(); h_4.join(); h_5.join(); h_6.join(); h_7.join(); h_8.join(); h_9.join()
-                    GPIO.cleanup()
                     self.reaction_finished()
 
         confirm_popup = Popup(title="CONFIRM", size_hint=(None, None), size=(300, 200))
@@ -680,27 +674,22 @@ class MikiScreen(FloatLayout):
             if self.selection_mood == "Parallel":
                 hilo_ms1.start(); hilo_s.start(); hilo_1.start(); hilo_2.start(); hilo_3.start(); hilo_4.start(); hilo_5.start(); hilo_6.start(); hilo_7.start(); hilo_8.start(); hilo_9.start()
                 hilo_s.join(); hilo_ms1.join(); hilo_1.join(); hilo_2.join(); hilo_3.join(); hilo_4.join(); hilo_5.join(); hilo_6.join(); hilo_7.join(); hilo_8.join(); hilo_9.join()
-                GPIO.cleanup()
                 self.reaction_finished()
             elif self.selection_mood == "In-Order":
                 if self.stir_stage == 0:
                     Pmp1(); Pmp2(); Pmp3(); Pmp4(); Pmp5(); Pmp6(); Pmp7(); Pmp8(); Pmp9()
-                    GPIO.cleanup()
                     self.reaction_finished()
                 elif self.stir_stage == 1:
                     hilo_1.start(); h_2.start(); hilo_ms1.start(); h_3.start(); h_4.start(); h_5.start(); h_6.start(); h_7.start(); h_8.start(); h_9.start()
                     hilo_1.join(); h_2.join(); hilo_ms1.join(); h_3.join(); h_4.join(); h_5.join(); h_6.join(); h_7.join(); h_8.join(); h_9.join()
-                    GPIO.cleanup()
                     self.reaction_finished()
                 elif self.stir_stage == 2:
                     Pmp1(); hilo_ms2.start(); h_2.start(); h_3.start(); h_4.start(); h_5.start(); h_6.start(); h_7.start(); h_8.start(); h_9.start()
                     hilo_ms2.join(); h_2.join(); h_3.join(); h_4.join(); h_5.join(); h_6.join(); h_7.join(); h_8.join(); h_9.join()
-                    GPIO.cleanup()
                     self.reaction_finished()
                 elif self.stir_stage == 3:
                     Pmp1(); Pmp2(); hilo_ms3.start(); h_3.start(); h_4.start(); h_5.start(); h_6.start(); h_7.start(); h_8.start(); h_9.start()
                     hilo_ms3.join(); h_3.join(); h_4.join(); h_5.join(); h_6.join(); h_7.join(); h_8.join(); h_9.join()
-                    GPIO.cleanup()
                     self.reaction_finished()
 
         confirm_popup = Popup(title="CONFIRM", size_hint=(None, None), size=(300, 200))
@@ -811,7 +800,6 @@ class MikiScreen(FloatLayout):
 
         confirm_popup.open()
 
-
 class MikiApp(App):
 
     def build(self):
@@ -820,7 +808,6 @@ class MikiApp(App):
         )
 
         return MikiScreen()
-
 
 if __name__ == "__main__":
     MikiApp().run()

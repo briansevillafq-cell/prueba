@@ -10,223 +10,399 @@ color_overlay = (0, 255, 0)
 camara_activa_global = False
 ultima_temp_placa = None
 
+
+# ============================================================
+# CONTROL DE CAMARA
+# ============================================================
+#
+# La camara usa UN SOLO HILO durante toda la ejecucion.
+# Ese mismo hilo abre, muestra, cierra y vuelve a abrir
+# la ventana de OpenCV. Esto evita recrear ventanas Qt
+# desde hilos Python diferentes.
+#
+
 hilo_camara_global = None
 lock_camara = threading.Lock()
 
+evento_abrir_camara = threading.Event()
+evento_salir_hilo_camara = threading.Event()
 
-def _worker_camara(app_screen=None):
-
-    global hilo_camara_global, camara_activa_global
-
-    try:
-        bucle_camara_hilo(app_screen)
-    finally:
-        with lock_camara:
-            camara_activa_global = False
-
-            if hilo_camara_global is threading.current_thread():
-                hilo_camara_global = None
-
-        print("[CAM] Hilo terminado completamente")
+app_screen_camara = None
 
 
 def iniciar_camara(app_screen=None):
+    """
+    Solicita abrir la camara.
 
-    global hilo_camara_global, camara_activa_global
+    Si el hilo permanente de camara no existe, se crea una sola vez.
+    Las siguientes aperturas reutilizan exactamente el mismo hilo.
+    """
+    global hilo_camara_global
+    global camara_activa_global
+    global app_screen_camara
 
     with lock_camara:
+
+        if app_screen is not None:
+            app_screen_camara = app_screen
+
+        # Crear el hilo permanente solamente una vez
         if (
-            hilo_camara_global is not None
-            and hilo_camara_global.is_alive()
+            hilo_camara_global is None
+            or not hilo_camara_global.is_alive()
         ):
-            print("[CAM] Ya existe un hilo de cámara activo")
+            evento_salir_hilo_camara.clear()
+
+            hilo_camara_global = threading.Thread(
+                target=_bucle_camara_persistente,
+                daemon=True,
+                name="HiloCamaraMIKI",
+            )
+
+            hilo_camara_global.start()
+
+        # Si ya estaba activa, no volver a solicitar otra apertura
+        if camara_activa_global:
+            print("[CAM] La camara ya esta activa")
             return False
 
-        print("Iniciando cámara")
+        print("Iniciando camara")
 
         camara_activa_global = True
-
-        hilo_camara_global = threading.Thread(
-            target=_worker_camara,
-            args=(app_screen,),
-            daemon=True,
-        )
-
-        hilo_camara_global.start()
+        evento_abrir_camara.set()
 
         return True
 
 
 def detener_camara():
     """
-    Solicita al hilo activo que cierre la cámara.
-    La liberación real del dispositivo ocurre dentro
-    del finally de bucle_camara_hilo().
+    Solicita cerrar la camara actual.
+
+    El hilo permanente NO se destruye.
+    Solamente se cierra VideoCapture y la ventana de OpenCV.
     """
     global camara_activa_global
 
     print("[CAM] Solicitando cierre")
+
     camara_activa_global = False
+    evento_abrir_camara.clear()
 
 
-def bucle_camara_hilo(app_screen=None):
-    # hilo camara
-    global texto_overlay, color_overlay, camara_activa_global
-
-    cap = None
-    nombre_ventana = "Monitoreo de Reaccion IKA"
+def _actualizar_estado_kivy(valor):
+    """
+    Actualiza el estado visual del boton CAM de Kivy
+    desde el hilo principal de Kivy.
+    """
+    if app_screen_camara is None:
+        return
 
     try:
-        # Intentar abrir /dev/video0
-        cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
+        from kivy.clock import Clock
+
+        Clock.schedule_once(
+            lambda dt: setattr(
+                app_screen_camara,
+                "camara_activa",
+                valor
+            ),
+            0,
+        )
+
+    except Exception as e:
+        print(f"[CAM] Error actualizando Kivy: {e}")
+
+
+def _abrir_dispositivo_camara():
+    """
+    Intenta abrir /dev/video0 y despues /dev/video1.
+
+    Se realizan varios intentos de lectura inicial para evitar
+    considerar fallida una camara que tarda un poco en entregar
+    su primer frame.
+    """
+    for indice in (0, 1):
+
+        cap = cv2.VideoCapture(
+            indice,
+            cv2.CAP_V4L2
+        )
+
+        if not cap.isOpened():
+            try:
+                cap.release()
+            except Exception:
+                pass
+            continue
+
+        cap.set(
+            cv2.CAP_PROP_FRAME_WIDTH,
+            640
+        )
+
+        cap.set(
+            cv2.CAP_PROP_FRAME_HEIGHT,
+            480
+        )
+
         ret = False
 
-        if cap.isOpened():
-            # Dar varios intentos para obtener el primer frame
-            for _ in range(10):
-                ret, _ = cap.read()
-                if ret:
-                    break
-                time.sleep(0.05)
+        for _ in range(10):
 
-        # Si video0 falla, liberar e intentar video1
-        if not cap.isOpened() or not ret:
-            if cap is not None:
-                cap.release()
-
-            cap = cv2.VideoCapture(1, cv2.CAP_V4L2)
-            ret = False
-
-            if cap.isOpened():
-                for _ in range(10):
-                    ret, _ = cap.read()
-                    if ret:
-                        break
-                    time.sleep(0.05)
-
-        # Si tampoco video1 funciona
-        if not cap.isOpened() or not ret:
-            print("Error camara")
-            return
-
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-
-        time.sleep(0.5)
-
-        cv2.namedWindow(nombre_ventana, cv2.WINDOW_GUI_NORMAL)
-        cv2.resizeWindow(nombre_ventana, 600, 300)
-        cv2.moveWindow(nombre_ventana, 0, 0)
-
-        while camara_activa_global:
             ret, frame = cap.read()
 
-            if not ret:
-                time.sleep(0.01)
-                continue
+            if ret and frame is not None:
+                return cap
 
-            try:
-                if (
-                    cv2.getWindowProperty(
-                        nombre_ventana,
-                        cv2.WND_PROP_VISIBLE
-                    )
-                    < 1
-                ):
-                    print("[CAM] Ventana cerrada con X")
-                    break
+            time.sleep(0.05)
 
-            except Exception:
-                print("[CAM] Ventana OpenCV cerrada")
-                break
-
-            frame = cv2.resize(
-                frame,
-                (600, 300),
-                interpolation=cv2.INTER_AREA
-            )
-
-            if texto_overlay:
-                font_scale = 0.45
-                thickness = 1
-                font = cv2.FONT_HERSHEY_SIMPLEX
-
-                (text_w, text_h), baseline = cv2.getTextSize(
-                    texto_overlay,
-                    font,
-                    font_scale,
-                    thickness
-                )
-
-                margin = 8
-
-                cv2.rectangle(
-                    frame,
-                    (10, 8),
-                    (
-                        10 + text_w + (margin * 2),
-                        10 + text_h + margin + 4
-                    ),
-                    (0, 0, 0),
-                    -1,
-                )
-
-                cv2.putText(
-                    frame,
-                    texto_overlay,
-                    (10 + margin, 10 + text_h + 2),
-                    font,
-                    font_scale,
-                    color_overlay,
-                    thickness,
-                    cv2.LINE_AA,
-                )
-
-            cv2.imshow(nombre_ventana, frame)
-
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                print("[CAM] Ventana cerrada con Q")
-                break
-
-            time.sleep(0.005)
-
-    finally:
-        # Marcar primero que la cámara ya no debe seguir ejecutándose
-        camara_activa_global = False
-
-        # Liberar físicamente el dispositivo V4L2
-        if cap is not None:
-            try:
-                if cap.isOpened():
-                    cap.release()
-            except Exception as e:
-                print(f"[CAM] Error liberando cámara: {e}")
-
-        # Destruir solamente la ventana de la cámara
         try:
-            cv2.destroyWindow(nombre_ventana)
-            cv2.waitKey(1)
+            cap.release()
         except Exception:
             pass
 
-        # Cambiar el estado del botón Cam a gris en la interfaz Kivy
-        if app_screen:
-            try:
-                from kivy.clock import Clock
+    return None
 
-                Clock.schedule_once(
-                    lambda dt: setattr(
-                        app_screen,
-                        "camara_activa",
-                        False
-                    ),
-                    0,
+
+def _bucle_camara_persistente():
+    """
+    Hilo permanente de camara.
+
+    Este hilo permanece vivo durante toda la ejecucion del programa.
+    Cada vez que evento_abrir_camara se activa:
+        1. abre VideoCapture
+        2. crea la ventana
+        3. muestra video
+        4. espera cierre por X, Q o boton CAM
+        5. libera VideoCapture
+        6. destruye la ventana
+        7. vuelve a esperar una nueva apertura
+
+    Lo importante es que TODAS las ventanas OpenCV se crean y
+    destruyen desde este mismo hilo.
+    """
+    global camara_activa_global
+
+    nombre_ventana = "Monitoreo de Reaccion IKA"
+
+    print("[CAM] Hilo permanente iniciado")
+
+    while not evento_salir_hilo_camara.is_set():
+
+        # Esperar hasta que alguien solicite abrir la camara
+        evento_abrir_camara.wait(timeout=0.1)
+
+        if evento_salir_hilo_camara.is_set():
+            break
+
+        if not evento_abrir_camara.is_set():
+            continue
+
+        cap = None
+        ventana_creada = False
+
+        try:
+            # ------------------------------------------------
+            # ABRIR CAMARA
+            # ------------------------------------------------
+
+            cap = _abrir_dispositivo_camara()
+
+            if cap is None:
+                print("Error camara")
+                camara_activa_global = False
+                evento_abrir_camara.clear()
+                _actualizar_estado_kivy(False)
+                continue
+
+            # Si mientras se estaba abriendo se solicito cerrar,
+            # no crear la ventana.
+            if not camara_activa_global:
+                continue
+
+            # ------------------------------------------------
+            # CREAR VENTANA
+            # ------------------------------------------------
+
+            cv2.namedWindow(
+                nombre_ventana,
+                cv2.WINDOW_GUI_NORMAL
+            )
+
+            ventana_creada = True
+
+            cv2.resizeWindow(
+                nombre_ventana,
+                600,
+                300
+            )
+
+            cv2.moveWindow(
+                nombre_ventana,
+                0,
+                0
+            )
+
+            # ------------------------------------------------
+            # BUCLE DE VIDEO
+            # ------------------------------------------------
+
+            while (
+                camara_activa_global
+                and evento_abrir_camara.is_set()
+                and not evento_salir_hilo_camara.is_set()
+            ):
+
+                ret, frame = cap.read()
+
+                if not ret:
+                    time.sleep(0.01)
+                    continue
+
+                # --------------------------------------------
+                # DETECTAR CIERRE CON X
+                # --------------------------------------------
+
+                try:
+                    visible = cv2.getWindowProperty(
+                        nombre_ventana,
+                        cv2.WND_PROP_VISIBLE
+                    )
+
+                    if visible < 1:
+                        print("[CAM] Ventana cerrada con X")
+                        camara_activa_global = False
+                        evento_abrir_camara.clear()
+                        break
+
+                except Exception:
+                    print("[CAM] Ventana OpenCV cerrada")
+                    camara_activa_global = False
+                    evento_abrir_camara.clear()
+                    break
+
+                # --------------------------------------------
+                # AJUSTAR FRAME
+                # --------------------------------------------
+
+                frame = cv2.resize(
+                    frame,
+                    (600, 300),
+                    interpolation=cv2.INTER_AREA
                 )
 
-            except Exception as e:
-                print(f"[CAM] Error actualizando Kivy: {e}")
+                # --------------------------------------------
+                # TEXTO OVERLAY
+                # --------------------------------------------
 
-        print("[CAM] Cámara liberada")
+                if texto_overlay:
+
+                    font_scale = 0.45
+                    thickness = 1
+                    font = cv2.FONT_HERSHEY_SIMPLEX
+
+                    (text_w, text_h), baseline = cv2.getTextSize(
+                        texto_overlay,
+                        font,
+                        font_scale,
+                        thickness
+                    )
+
+                    margin = 8
+
+                    cv2.rectangle(
+                        frame,
+                        (10, 8),
+                        (
+                            10 + text_w + (margin * 2),
+                            10 + text_h + margin + 4
+                        ),
+                        (0, 0, 0),
+                        -1,
+                    )
+
+                    cv2.putText(
+                        frame,
+                        texto_overlay,
+                        (10 + margin, 10 + text_h + 2),
+                        font,
+                        font_scale,
+                        color_overlay,
+                        thickness,
+                        cv2.LINE_AA,
+                    )
+
+                # --------------------------------------------
+                # MOSTRAR FRAME
+                # --------------------------------------------
+
+                cv2.imshow(
+                    nombre_ventana,
+                    frame
+                )
+
+                tecla = cv2.waitKey(1) & 0xFF
+
+                if tecla == ord("q"):
+
+                    print("[CAM] Ventana cerrada con Q")
+
+                    camara_activa_global = False
+                    evento_abrir_camara.clear()
+
+                    break
+
+                time.sleep(0.005)
+
+        finally:
+            # ------------------------------------------------
+            # LIBERAR DISPOSITIVO
+            # ------------------------------------------------
+
+            if cap is not None:
+                try:
+                    cap.release()
+                except Exception as e:
+                    print(
+                        f"[CAM] Error liberando camara: {e}"
+                    )
+
+            # ------------------------------------------------
+            # DESTRUIR VENTANA
+            # ------------------------------------------------
+
+            if ventana_creada:
+                try:
+                    cv2.destroyWindow(
+                        nombre_ventana
+                    )
+
+                    # Procesar el evento de destruccion
+                    cv2.waitKey(1)
+
+                except Exception:
+                    pass
+
+            camara_activa_global = False
+            evento_abrir_camara.clear()
+
+            _actualizar_estado_kivy(False)
+
+            print("[CAM] Camara liberada")
+
+    # --------------------------------------------------------
+    # SALIDA DEFINITIVA DEL HILO
+    # --------------------------------------------------------
+
+    try:
+        cv2.destroyAllWindows()
+        cv2.waitKey(1)
+    except Exception:
+        pass
+
+    camara_activa_global = False
+
+    print("[CAM] Hilo permanente terminado")
 
 
 async def leer_temperatura_placa(parrilla):

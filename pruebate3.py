@@ -10,17 +10,6 @@ color_overlay = (0, 255, 0)
 camara_activa_global = False
 ultima_temp_placa = None
 
-
-# ============================================================
-# CONTROL DE CAMARA
-# ============================================================
-#
-# La camara usa UN SOLO HILO durante toda la ejecucion.
-# Ese mismo hilo abre, muestra, cierra y vuelve a abrir
-# la ventana de OpenCV. Esto evita recrear ventanas Qt
-# desde hilos Python diferentes.
-#
-
 hilo_camara_global = None
 lock_camara = threading.Lock()
 
@@ -31,12 +20,7 @@ app_screen_camara = None
 
 
 def iniciar_camara(app_screen=None):
-    """
-    Solicita abrir la camara.
 
-    Si el hilo permanente de camara no existe, se crea una sola vez.
-    Las siguientes aperturas reutilizan exactamente el mismo hilo.
-    """
     global hilo_camara_global
     global camara_activa_global
     global app_screen_camara
@@ -61,7 +45,6 @@ def iniciar_camara(app_screen=None):
 
             hilo_camara_global.start()
 
-        # Si ya estaba activa, no volver a solicitar otra apertura
         if camara_activa_global:
             print("[CAM] La camara ya esta activa")
             return False
@@ -75,12 +58,6 @@ def iniciar_camara(app_screen=None):
 
 
 def detener_camara():
-    """
-    Solicita cerrar la camara actual.
-
-    El hilo permanente NO se destruye.
-    Solamente se cierra VideoCapture y la ventana de OpenCV.
-    """
     global camara_activa_global
 
     print("[CAM] Solicitando cierre")
@@ -90,10 +67,7 @@ def detener_camara():
 
 
 def _actualizar_estado_kivy(valor):
-    """
-    Actualiza el estado visual del boton CAM de Kivy
-    desde el hilo principal de Kivy.
-    """
+
     if app_screen_camara is None:
         return
 
@@ -114,13 +88,7 @@ def _actualizar_estado_kivy(valor):
 
 
 def _abrir_dispositivo_camara():
-    """
-    Intenta abrir /dev/video0 y despues /dev/video1.
 
-    Se realizan varios intentos de lectura inicial para evitar
-    considerar fallida una camara que tarda un poco en entregar
-    su primer frame.
-    """
     for indice in (0, 1):
 
         cap = cv2.VideoCapture(
@@ -165,31 +133,15 @@ def _abrir_dispositivo_camara():
 
 
 def _bucle_camara_persistente():
-    """
-    Hilo permanente de camara.
 
-    Este hilo permanece vivo durante toda la ejecucion del programa.
-    Cada vez que evento_abrir_camara se activa:
-        1. abre VideoCapture
-        2. crea la ventana
-        3. muestra video
-        4. espera cierre por X, Q o boton CAM
-        5. libera VideoCapture
-        6. destruye la ventana
-        7. vuelve a esperar una nueva apertura
-
-    Lo importante es que TODAS las ventanas OpenCV se crean y
-    destruyen desde este mismo hilo.
-    """
     global camara_activa_global
 
     nombre_ventana = "Monitoreo de Reaccion IKA"
 
-    print("[CAM] Hilo permanente iniciado")
+    print("Hilo permanente iniciado")
 
     while not evento_salir_hilo_camara.is_set():
 
-        # Esperar hasta que alguien solicite abrir la camara
         evento_abrir_camara.wait(timeout=0.1)
 
         if evento_salir_hilo_camara.is_set():
@@ -202,9 +154,6 @@ def _bucle_camara_persistente():
         ventana_creada = False
 
         try:
-            # ------------------------------------------------
-            # ABRIR CAMARA
-            # ------------------------------------------------
 
             cap = _abrir_dispositivo_camara()
 
@@ -215,14 +164,8 @@ def _bucle_camara_persistente():
                 _actualizar_estado_kivy(False)
                 continue
 
-            # Si mientras se estaba abriendo se solicito cerrar,
-            # no crear la ventana.
             if not camara_activa_global:
                 continue
-
-            # ------------------------------------------------
-            # CREAR VENTANA
-            # ------------------------------------------------
 
             cv2.namedWindow(
                 nombre_ventana,
@@ -243,10 +186,6 @@ def _bucle_camara_persistente():
                 0
             )
 
-            # ------------------------------------------------
-            # BUCLE DE VIDEO
-            # ------------------------------------------------
-
             while (
                 camara_activa_global
                 and evento_abrir_camara.is_set()
@@ -258,10 +197,6 @@ def _bucle_camara_persistente():
                 if not ret:
                     time.sleep(0.01)
                     continue
-
-                # --------------------------------------------
-                # DETECTAR CIERRE CON X
-                # --------------------------------------------
 
                 try:
                     visible = cv2.getWindowProperty(
@@ -281,19 +216,11 @@ def _bucle_camara_persistente():
                     evento_abrir_camara.clear()
                     break
 
-                # --------------------------------------------
-                # AJUSTAR FRAME
-                # --------------------------------------------
-
                 frame = cv2.resize(
                     frame,
                     (600, 300),
                     interpolation=cv2.INTER_AREA
                 )
-
-                # --------------------------------------------
-                # TEXTO OVERLAY
-                # --------------------------------------------
 
                 if texto_overlay:
 
@@ -332,10 +259,6 @@ def _bucle_camara_persistente():
                         cv2.LINE_AA,
                     )
 
-                # --------------------------------------------
-                # MOSTRAR FRAME
-                # --------------------------------------------
-
                 cv2.imshow(
                     nombre_ventana,
                     frame
@@ -355,9 +278,6 @@ def _bucle_camara_persistente():
                 time.sleep(0.005)
 
         finally:
-            # ------------------------------------------------
-            # LIBERAR DISPOSITIVO
-            # ------------------------------------------------
 
             if cap is not None:
                 try:
@@ -366,10 +286,6 @@ def _bucle_camara_persistente():
                     print(
                         f"[CAM] Error liberando camara: {e}"
                     )
-
-            # ------------------------------------------------
-            # DESTRUIR VENTANA
-            # ------------------------------------------------
 
             if ventana_creada:
                 try:
@@ -388,11 +304,7 @@ def _bucle_camara_persistente():
 
             _actualizar_estado_kivy(False)
 
-            print("[CAM] Camara liberada")
-
-    # --------------------------------------------------------
-    # SALIDA DEFINITIVA DEL HILO
-    # --------------------------------------------------------
+            print("Camara liberada")
 
     try:
         cv2.destroyAllWindows()
@@ -402,7 +314,7 @@ def _bucle_camara_persistente():
 
     camara_activa_global = False
 
-    print("[CAM] Hilo permanente terminado")
+    print("Hilo terminado")
 
 
 async def leer_temperatura_placa(parrilla):
@@ -424,7 +336,6 @@ async def leer_temperatura_placa(parrilla):
 
 
 async def esperar_hasta_rango(parrilla, temperatura_final):
-    # calentamiento inicial
     global texto_overlay, color_overlay
     color_overlay = (0, 255, 0)
 
@@ -432,7 +343,7 @@ async def esperar_hasta_rango(parrilla, temperatura_final):
         temp_placa = await leer_temperatura_placa(parrilla)
         txt_placa = f"{temp_placa:.1f} C" if temp_placa is not None else "N/A"
         texto_overlay = (
-            f"Calentando... Temp Placa: {txt_placa} | Goal: {temperatura_final:.1f} C"
+            f"Temp Placa: {txt_placa} | Goal: {temperatura_final:.1f} C"
         )
 
         if temp_placa is not None and temp_placa >= temperatura_final:
@@ -442,7 +353,6 @@ async def esperar_hasta_rango(parrilla, temperatura_final):
 
 
 async def mantener_temperatura(parrilla, temperatura, tiempo_minutos):
-    # tiempo de reaccion
     global texto_overlay, color_overlay
     color_overlay = (0, 255, 0)
 

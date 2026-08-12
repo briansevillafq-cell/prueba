@@ -14,17 +14,17 @@ def bucle_camara_hilo(app_screen=None):
     # hilo camara
     global texto_overlay, color_overlay, camara_activa_global
 
-    cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
-    ret, _ = cap.read()
-    
-    if not cap.isOpened() or not ret:
-        cap.release()
-        cap = cv2.VideoCapture(1, cv2.CAP_V4L2)
+    cap = None
+    for i in range(12):
+        temp_cap = cv2.VideoCapture(i, cv2.CAP_V4L2)
+        if temp_cap.isOpened():
+            ret, _ = temp_cap.read()
+            if ret:
+                cap = temp_cap
+                break
+            temp_cap.release()
 
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-
-    if not cap.isOpened():
+    if cap is None:
         print("Error camara")
         camara_activa_global = False
         if app_screen:
@@ -34,6 +34,9 @@ def bucle_camara_hilo(app_screen=None):
                 lambda dt: setattr(app_screen, "camara_activa", False)
             )
         return
+
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
     try:
         nombre_ventana = "Monitoreo de Reaccion IKA"

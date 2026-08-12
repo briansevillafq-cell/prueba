@@ -22,7 +22,6 @@ Window.size = (1135, 665)
 Window.resizable = False
 Window.title = "MIK-I"
 
-
 class MikiScreen(FloatLayout):
 
     camara_activa = BooleanProperty(False)
@@ -39,9 +38,7 @@ class MikiScreen(FloatLayout):
         self._ultimo_toggle_camara = 0.0
 
     def toggle_camera(self):
-        # --------------------------------------------------
-        # Evitar doble ejecución del mismo clic/evento
-        # --------------------------------------------------
+
         ahora = time.monotonic()
 
         if ahora - self._ultimo_toggle_camara < 0.8:
@@ -50,19 +47,13 @@ class MikiScreen(FloatLayout):
 
         self._ultimo_toggle_camara = ahora
 
-        # --------------------------------------------------
-        # Si la cámara está encendida -> apagar
-        # --------------------------------------------------
         if pruebate3.camara_activa_global:
             print("[CAM UI] Apagando cámara")
             pruebate3.detener_camara()
             self.camara_activa = False
             return
 
-        # --------------------------------------------------
-        # Si la cámara está apagada -> encender
-        # --------------------------------------------------
-        print("[CAM UI] Encendiendo cámara")
+        print("Encendiendo cámara")
 
         pruebate3.texto_overlay = "EN ESPERA"
         pruebate3.color_overlay = (0, 255, 0)
@@ -75,8 +66,6 @@ class MikiScreen(FloatLayout):
     def stirring(self, temp, rpm, time_wait, time_min):
         """Ejecuta IKA desde pruebate3.py."""
 
-        # Iniciar cámara solamente si realmente no existe
-        # ningún hilo de cámara funcionando o cerrándose.
         hilo_cam = pruebate3.hilo_camara_global
 
         if (
@@ -283,16 +272,16 @@ class MikiScreen(FloatLayout):
 
         def on_yes(instance):
             self.flow = {
-                0: 28,
+                14: 28,
                 17: 0.2481,
                 27: 0.1892,
                 22: 0.2099,
                 13: 0.2285,
-                2: 0.22,
-                18: 0.22,
+                2: 0.2290,
+                18: 0.2290,
                 25: 0.2409,
-                4: 0.22,
-                7: 0.22,
+                4: 0.2290,
+                7: 0.2290,
             }
 
             popup.dismiss()
@@ -314,7 +303,7 @@ class MikiScreen(FloatLayout):
 
         popup.open()
 
-    def rxnY(self, *args):
+    def _run_reaction(self, include_load_time):
 
         self.pps = [
             14,
@@ -326,7 +315,7 @@ class MikiScreen(FloatLayout):
             18,
             25,
             4,
-            7
+            7,
         ]
 
         self.strpins = [
@@ -341,7 +330,7 @@ class MikiScreen(FloatLayout):
             1,
             8,
             24,
-            12
+            12,
         ]
 
         self.flow = {
@@ -367,13 +356,12 @@ class MikiScreen(FloatLayout):
             17,
             18,
             19,
-            18
+            18,
         ]
 
         self.used_pines = {}
 
         def wmk():
-
             self.tempstr = (
                 int(self.ids.temp_input.text)
                 if self.ids.temp_input.text.strip()
@@ -452,12 +440,53 @@ class MikiScreen(FloatLayout):
                 else 0
             )
 
-            t_wait = (
-                self.v1 / self.flow[self.pps[1]]
-                + self.tc[1]
-            ) + (
-                self.v2 / self.flow[self.pps[2]]
-                + self.tc[2]
+            volumes = [
+                self.vs,
+                self.v1,
+                self.v2,
+                self.v3,
+                self.v4,
+                self.v5,
+                self.v6,
+                self.v7,
+                self.v8,
+                self.v9,
+            ]
+
+            def load_time(index):
+                return self.tc[index] if include_load_time else 0
+
+            def pump_time(index):
+                return (
+                    volumes[index] / self.flow[self.pps[index]]
+                    + load_time(index)
+                )
+
+            def flow_time(index):
+                return volumes[index] / self.flow[self.pps[index]]
+
+            def td_wait(index):
+
+                Pmp2 espera a Pmp1.
+                Desde Pmp3 se conserva también el término de la Service Pump,
+                tal como estaba definido en la lógica original.
+                """
+                if index == 2:
+                    return flow_time(1)
+
+                return flow_time(0) + sum(
+                    flow_time(i)
+                    for i in range(1, index)
+                )
+
+            stir_wait_1 = sum(
+                pump_time(i) for i in range(1, 10)
+            )
+            stir_wait_2 = sum(
+                pump_time(i) for i in range(2, 10)
+            )
+            stir_wait_3 = sum(
+                pump_time(i) for i in range(3, 10)
             )
 
             def stir1():
@@ -465,7 +494,25 @@ class MikiScreen(FloatLayout):
                     self.stirring(
                         self.tempstr,
                         self.rpmstr,
-                        t_wait if self.tmstr != 0 else 1,
+                        stir_wait_1 if self.tmstr != 0 else 1,
+                        self.tmstr,
+                    )
+
+            def stir2():
+                if self.stir_stage == 2:
+                    self.stirring(
+                        self.tempstr,
+                        self.rpmstr,
+                        stir_wait_2 if self.tmstr != 0 else 1,
+                        self.tmstr,
+                    )
+
+            def stir3():
+                if self.stir_stage == 3:
+                    self.stirring(
+                        self.tempstr,
+                        self.rpmstr,
+                        stir_wait_3 if self.tmstr != 0 else 1,
                         self.tmstr,
                     )
 
@@ -475,13 +522,11 @@ class MikiScreen(FloatLayout):
                         0,
                         int(self.pps[0]),
                         int(self.strpins[0]),
-                        self.vs / self.flow[self.pps[0]]
-                        + self.tc[0],
+                        pump_time(0),
                     )
-
                     self.used_pines[0] = (
                         self.pps[0],
-                        self.strpins[0]
+                        self.strpins[0],
                     )
 
             def Pmp1():
@@ -490,16 +535,11 @@ class MikiScreen(FloatLayout):
                         1,
                         int(self.pps[1]),
                         int(self.strpins[1]),
-                        (
-                            self.v1
-                            / self.flow[self.pps[1]]
-                        )
-                        + self.tc[1],
+                        pump_time(1),
                     )
-
                     self.used_pines[1] = (
                         self.pps[1],
-                        self.strpins[1]
+                        self.strpins[1],
                     )
 
             def Pmp2():
@@ -508,16 +548,102 @@ class MikiScreen(FloatLayout):
                         2,
                         int(self.pps[2]),
                         int(self.strpins[2]),
-                        (
-                            self.v2
-                            / self.flow[self.pps[2]]
-                        )
-                        + self.tc[2],
+                        pump_time(2),
                     )
-
                     self.used_pines[2] = (
                         self.pps[2],
-                        self.strpins[2]
+                        self.strpins[2],
+                    )
+
+            def Pmp3():
+                if self.v3 != 0:
+                    pumpsWork(
+                        3,
+                        int(self.pps[3]),
+                        int(self.strpins[3]),
+                        pump_time(3),
+                    )
+                    self.used_pines[3] = (
+                        self.pps[3],
+                        self.strpins[3],
+                    )
+
+            def Pmp4():
+                if self.v4 != 0:
+                    pumpsWork(
+                        4,
+                        int(self.pps[4]),
+                        int(self.strpins[4]),
+                        pump_time(4),
+                    )
+                    self.used_pines[4] = (
+                        self.pps[4],
+                        self.strpins[4],
+                    )
+
+            def Pmp5():
+                if self.v5 != 0:
+                    pumpsWork(
+                        5,
+                        int(self.pps[5]),
+                        int(self.strpins[5]),
+                        pump_time(5),
+                    )
+                    self.used_pines[5] = (
+                        self.pps[5],
+                        self.strpins[5],
+                    )
+
+            def Pmp6():
+                if self.v6 != 0:
+                    pumpsWork(
+                        6,
+                        int(self.pps[6]),
+                        int(self.strpins[6]),
+                        pump_time(6),
+                    )
+                    self.used_pines[6] = (
+                        self.pps[6],
+                        self.strpins[6],
+                    )
+
+            def Pmp7():
+                if self.v7 != 0:
+                    pumpsWork(
+                        7,
+                        int(self.pps[7]),
+                        int(self.strpins[7]),
+                        pump_time(7),
+                    )
+                    self.used_pines[7] = (
+                        self.pps[7],
+                        self.strpins[7],
+                    )
+
+            def Pmp8():
+                if self.v8 != 0:
+                    pumpsWork(
+                        8,
+                        int(self.pps[8]),
+                        int(self.strpins[8]),
+                        pump_time(8),
+                    )
+                    self.used_pines[8] = (
+                        self.pps[8],
+                        self.strpins[8],
+                    )
+
+            def Pmp9():
+                if self.v9 != 0:
+                    pumpsWork(
+                        9,
+                        int(self.pps[9]),
+                        int(self.strpins[9]),
+                        pump_time(9),
+                    )
+                    self.used_pines[9] = (
+                        self.pps[9],
+                        self.strpins[9],
                     )
 
             def Pmp2TD():
@@ -526,77 +652,250 @@ class MikiScreen(FloatLayout):
                         2,
                         int(self.pps[2]),
                         int(self.strpins[2]),
-                        self.v1
-                        / self.flow[self.pps[1]],
-                        self.v2
-                        / self.flow[self.pps[2]]
-                        + self.tc[2],
+                        td_wait(2),
+                        pump_time(2),
                     )
-
                     self.used_pines[2] = (
                         self.pps[2],
-                        self.strpins[2]
+                        self.strpins[2],
                     )
 
-            hilo_ms1 = threading.Thread(
-                target=stir1
-            )
+            def Pmp3TD():
+                if self.v3 != 0:
+                    pumpsWorkTC(
+                        3,
+                        int(self.pps[3]),
+                        int(self.strpins[3]),
+                        td_wait(3),
+                        pump_time(3),
+                    )
+                    self.used_pines[3] = (
+                        self.pps[3],
+                        self.strpins[3],
+                    )
 
-            hilo_s = threading.Thread(
-                target=Pmps
-            )
+            def Pmp4TD():
+                if self.v4 != 0:
+                    pumpsWorkTC(
+                        4,
+                        int(self.pps[4]),
+                        int(self.strpins[4]),
+                        td_wait(4),
+                        pump_time(4),
+                    )
+                    self.used_pines[4] = (
+                        self.pps[4],
+                        self.strpins[4],
+                    )
 
-            hilo_1 = threading.Thread(
-                target=Pmp1
-            )
+            def Pmp5TD():
+                if self.v5 != 0:
+                    pumpsWorkTC(
+                        5,
+                        int(self.pps[5]),
+                        int(self.strpins[5]),
+                        td_wait(5),
+                        pump_time(5),
+                    )
+                    self.used_pines[5] = (
+                        self.pps[5],
+                        self.strpins[5],
+                    )
 
-            hilo_2 = threading.Thread(
-                target=Pmp2
-            )
+            def Pmp6TD():
+                if self.v6 != 0:
+                    pumpsWorkTC(
+                        6,
+                        int(self.pps[6]),
+                        int(self.strpins[6]),
+                        td_wait(6),
+                        pump_time(6),
+                    )
+                    self.used_pines[6] = (
+                        self.pps[6],
+                        self.strpins[6],
+                    )
 
-            h_2 = threading.Thread(
-                target=Pmp2TD
-            )
+            def Pmp7TD():
+                if self.v7 != 0:
+                    pumpsWorkTC(
+                        7,
+                        int(self.pps[7]),
+                        int(self.strpins[7]),
+                        td_wait(7),
+                        pump_time(7),
+                    )
+                    self.used_pines[7] = (
+                        self.pps[7],
+                        self.strpins[7],
+                    )
+
+            def Pmp8TD():
+                if self.v8 != 0:
+                    pumpsWorkTC(
+                        8,
+                        int(self.pps[8]),
+                        int(self.strpins[8]),
+                        td_wait(8),
+                        pump_time(8),
+                    )
+                    self.used_pines[8] = (
+                        self.pps[8],
+                        self.strpins[8],
+                    )
+
+            def Pmp9TD():
+                if self.v9 != 0:
+                    pumpsWorkTC(
+                        9,
+                        int(self.pps[9]),
+                        int(self.strpins[9]),
+                        td_wait(9),
+                        pump_time(9),
+                    )
+                    self.used_pines[9] = (
+                        self.pps[9],
+                        self.strpins[9],
+                    )
+
+            hilo_ms1 = threading.Thread(target=stir1)
+            hilo_ms2 = threading.Thread(target=stir2)
+            hilo_ms3 = threading.Thread(target=stir3)
+
+            hilo_s = threading.Thread(target=Pmps)
+            hilo_1 = threading.Thread(target=Pmp1)
+            hilo_2 = threading.Thread(target=Pmp2)
+            hilo_3 = threading.Thread(target=Pmp3)
+            hilo_4 = threading.Thread(target=Pmp4)
+            hilo_5 = threading.Thread(target=Pmp5)
+            hilo_6 = threading.Thread(target=Pmp6)
+            hilo_7 = threading.Thread(target=Pmp7)
+            hilo_8 = threading.Thread(target=Pmp8)
+            hilo_9 = threading.Thread(target=Pmp9)
+
+            h_2 = threading.Thread(target=Pmp2TD)
+            h_3 = threading.Thread(target=Pmp3TD)
+            h_4 = threading.Thread(target=Pmp4TD)
+            h_5 = threading.Thread(target=Pmp5TD)
+            h_6 = threading.Thread(target=Pmp6TD)
+            h_7 = threading.Thread(target=Pmp7TD)
+            h_8 = threading.Thread(target=Pmp8TD)
+            h_9 = threading.Thread(target=Pmp9TD)
 
             if self.selection_mood == "Parallel":
+                parallel_threads = [
+                    hilo_s,
+                    hilo_ms1,
+                    hilo_1,
+                    hilo_2,
+                    hilo_3,
+                    hilo_4,
+                    hilo_5,
+                    hilo_6,
+                    hilo_7,
+                    hilo_8,
+                    hilo_9,
+                ]
 
-                hilo_s.start()
-                hilo_ms1.start()
-                hilo_1.start()
-                hilo_2.start()
+                for hilo in parallel_threads:
+                    hilo.start()
 
-                hilo_s.join()
-                hilo_ms1.join()
-                hilo_1.join()
-                hilo_2.join()
+                for hilo in parallel_threads:
+                    hilo.join()
 
                 self.reaction_finished()
 
             elif self.selection_mood == "In-Order":
 
+                # Sin agitación durante la adición.
                 if self.stir_stage == 0:
-
                     Pmp1()
                     Pmp2()
+                    Pmp3()
+                    Pmp4()
+                    Pmp5()
+                    Pmp6()
+                    Pmp7()
+                    Pmp8()
+                    Pmp9()
 
                     self.reaction_finished()
 
+                # Agitación desde la primera etapa.
                 elif self.stir_stage == 1:
+                    in_order_threads = [
+                        hilo_1,
+                        h_2,
+                        hilo_ms1,
+                        h_3,
+                        h_4,
+                        h_5,
+                        h_6,
+                        h_7,
+                        h_8,
+                        h_9,
+                    ]
 
-                    hilo_1.start()
-                    h_2.start()
-                    hilo_ms1.start()
+                    for hilo in in_order_threads:
+                        hilo.start()
 
-                    hilo_1.join()
-                    h_2.join()
-                    hilo_ms1.join()
+                    for hilo in in_order_threads:
+                        hilo.join()
+
+                    self.reaction_finished()
+
+                # Agitación a partir de la segunda etapa.
+                elif self.stir_stage == 2:
+                    Pmp1()
+
+                    in_order_threads = [
+                        hilo_ms2,
+                        h_2,
+                        h_3,
+                        h_4,
+                        h_5,
+                        h_6,
+                        h_7,
+                        h_8,
+                        h_9,
+                    ]
+
+                    for hilo in in_order_threads:
+                        hilo.start()
+
+                    for hilo in in_order_threads:
+                        hilo.join()
+
+                    self.reaction_finished()
+
+                # Agitación a partir de la tercera etapa.
+                elif self.stir_stage == 3:
+                    Pmp1()
+                    Pmp2()
+
+                    in_order_threads = [
+                        hilo_ms3,
+                        h_3,
+                        h_4,
+                        h_5,
+                        h_6,
+                        h_7,
+                        h_8,
+                        h_9,
+                    ]
+
+                    for hilo in in_order_threads:
+                        hilo.start()
+
+                    for hilo in in_order_threads:
+                        hilo.join()
 
                     self.reaction_finished()
 
         confirm_popup = Popup(
             title="CONFIRM",
             size_hint=(None, None),
-            size=(300, 200)
+            size=(300, 200),
         )
 
         content = BoxLayout(
@@ -606,7 +905,7 @@ class MikiScreen(FloatLayout):
         content.add_widget(
             Label(
                 text="Do you want to start the reaction?",
-                font_size=18
+                font_size=18,
             )
         )
 
@@ -625,7 +924,7 @@ class MikiScreen(FloatLayout):
         yes_btn.bind(
             on_press=lambda x: [
                 confirm_popup.dismiss(),
-                wmk()
+                wmk(),
             ]
         )
 
@@ -635,24 +934,20 @@ class MikiScreen(FloatLayout):
             ]
         )
 
-        buttons.add_widget(
-            yes_btn
-        )
-
-        buttons.add_widget(
-            no_btn
-        )
-
-        content.add_widget(
-            buttons
-        )
+        buttons.add_widget(yes_btn)
+        buttons.add_widget(no_btn)
+        content.add_widget(buttons)
 
         confirm_popup.content = content
-
         confirm_popup.open()
 
+    def rxnY(self, *args):
+        # YES: considera tiempos de carga tc.
+        self._run_reaction(include_load_time=True)
+
     def rxnN(self, *args):
-        self.rxnY(*args)
+        # NO: NO considera tiempos de carga tc.
+        self._run_reaction(include_load_time=False)
 
     def chyorn(self):
 

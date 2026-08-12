@@ -22,6 +22,7 @@ Window.size = (1135, 665)
 Window.resizable = False
 Window.title = "MIK-I"
 
+
 class MikiScreen(FloatLayout):
 
     camara_activa = BooleanProperty(False)
@@ -34,10 +35,11 @@ class MikiScreen(FloatLayout):
         self.used_pines = {}
         self.usb_port = "/dev/ttyUSB0"
 
-        # Evita que un mismo clic/evento de CAM se procese dos veces
+
         self._ultimo_toggle_camara = 0.0
 
     def toggle_camera(self):
+
 
         ahora = time.monotonic()
 
@@ -47,13 +49,15 @@ class MikiScreen(FloatLayout):
 
         self._ultimo_toggle_camara = ahora
 
+
         if pruebate3.camara_activa_global:
             print("[CAM UI] Apagando cámara")
             pruebate3.detener_camara()
             self.camara_activa = False
             return
 
-        print("Encendiendo cámara")
+
+        print("[CAM UI] Encendiendo cámara")
 
         pruebate3.texto_overlay = "EN ESPERA"
         pruebate3.color_overlay = (0, 255, 0)
@@ -64,7 +68,7 @@ class MikiScreen(FloatLayout):
             self.camara_activa = True
 
     def stirring(self, temp, rpm, time_wait, time_min):
-        """Ejecuta IKA desde pruebate3.py."""
+
 
         hilo_cam = pruebate3.hilo_camara_global
 
@@ -305,6 +309,7 @@ class MikiScreen(FloatLayout):
 
     def _run_reaction(self, include_load_time):
 
+
         self.pps = [
             14,
             17,
@@ -317,6 +322,7 @@ class MikiScreen(FloatLayout):
             4,
             7,
         ]
+
 
         self.strpins = [
             15,
@@ -332,6 +338,7 @@ class MikiScreen(FloatLayout):
             24,
             12,
         ]
+
 
         self.flow = {
             14: 28,
@@ -457,20 +464,19 @@ class MikiScreen(FloatLayout):
                 return self.tc[index] if include_load_time else 0
 
             def pump_time(index):
+
                 return (
                     volumes[index] / self.flow[self.pps[index]]
                     + load_time(index)
                 )
 
             def flow_time(index):
+
                 return volumes[index] / self.flow[self.pps[index]]
 
             def td_wait(index):
 
-                Pmp2 espera a Pmp1.
-                Desde Pmp3 se conserva también el término de la Service Pump,
-                tal como estaba definido en la lógica original.
-                """
+
                 if index == 2:
                     return flow_time(1)
 
@@ -478,6 +484,7 @@ class MikiScreen(FloatLayout):
                     flow_time(i)
                     for i in range(1, index)
                 )
+
 
             stir_wait_1 = sum(
                 pump_time(i) for i in range(1, 10)
@@ -515,6 +522,7 @@ class MikiScreen(FloatLayout):
                         stir_wait_3 if self.tmstr != 0 else 1,
                         self.tmstr,
                     )
+
 
             def Pmps():
                 if self.vs != 0:
@@ -646,6 +654,7 @@ class MikiScreen(FloatLayout):
                         self.strpins[9],
                     )
 
+
             def Pmp2TD():
                 if self.v2 != 0:
                     pumpsWorkTC(
@@ -758,6 +767,7 @@ class MikiScreen(FloatLayout):
                         self.strpins[9],
                     )
 
+
             hilo_ms1 = threading.Thread(target=stir1)
             hilo_ms2 = threading.Thread(target=stir2)
             hilo_ms3 = threading.Thread(target=stir3)
@@ -782,6 +792,7 @@ class MikiScreen(FloatLayout):
             h_8 = threading.Thread(target=Pmp8TD)
             h_9 = threading.Thread(target=Pmp9TD)
 
+
             if self.selection_mood == "Parallel":
                 parallel_threads = [
                     hilo_s,
@@ -805,9 +816,10 @@ class MikiScreen(FloatLayout):
 
                 self.reaction_finished()
 
+
             elif self.selection_mood == "In-Order":
 
-                # Sin agitación durante la adición.
+
                 if self.stir_stage == 0:
                     Pmp1()
                     Pmp2()
@@ -821,7 +833,7 @@ class MikiScreen(FloatLayout):
 
                     self.reaction_finished()
 
-                # Agitación desde la primera etapa.
+
                 elif self.stir_stage == 1:
                     in_order_threads = [
                         hilo_1,
@@ -844,7 +856,7 @@ class MikiScreen(FloatLayout):
 
                     self.reaction_finished()
 
-                # Agitación a partir de la segunda etapa.
+
                 elif self.stir_stage == 2:
                     Pmp1()
 
@@ -868,7 +880,7 @@ class MikiScreen(FloatLayout):
 
                     self.reaction_finished()
 
-                # Agitación a partir de la tercera etapa.
+
                 elif self.stir_stage == 3:
                     Pmp1()
                     Pmp2()
@@ -942,11 +954,11 @@ class MikiScreen(FloatLayout):
         confirm_popup.open()
 
     def rxnY(self, *args):
-        # YES: considera tiempos de carga tc.
+
         self._run_reaction(include_load_time=True)
 
     def rxnN(self, *args):
-        # NO: NO considera tiempos de carga tc.
+
         self._run_reaction(include_load_time=False)
 
     def chyorn(self):

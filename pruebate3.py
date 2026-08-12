@@ -15,14 +15,30 @@ def bucle_camara_hilo(app_screen=None):
     global texto_overlay, color_overlay, camara_activa_global
 
     cap = None
-    for i in range(12):
+    # Solo buscamos en los primeros 4 puertos para no hacer lento el proceso
+    for i in range(4):
         temp_cap = cv2.VideoCapture(i, cv2.CAP_V4L2)
         if temp_cap.isOpened():
-            ret, _ = temp_cap.read()
-            if ret:
+            # Configurar resolucion antes de intentar leer
+            temp_cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            temp_cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            
+            time.sleep(0.5)  # Tiempo para que el sensor de la camara encienda
+            
+            # Intentar leer hasta 5 veces (calentamiento)
+            camara_lista = False
+            for _ in range(5):
+                ret, _ = temp_cap.read()
+                if ret:
+                    camara_lista = True
+                    break
+                time.sleep(0.1)
+                
+            if camara_lista:
                 cap = temp_cap
-                break
-            temp_cap.release()
+                break  # Encontramos el puerto correcto
+            else:
+                temp_cap.release()
 
     if cap is None:
         print("Error camara")
@@ -34,9 +50,6 @@ def bucle_camara_hilo(app_screen=None):
                 lambda dt: setattr(app_screen, "camara_activa", False)
             )
         return
-
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
     try:
         nombre_ventana = "Monitoreo de Reaccion IKA"

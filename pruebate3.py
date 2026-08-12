@@ -1,4 +1,5 @@
 import asyncio
+import threading
 import time
 
 import cv2
@@ -9,67 +10,141 @@ color_overlay = (0, 255, 0)
 camara_activa_global = False
 ultima_temp_placa = None
 
+hilo_camara_global = None
+lock_camara = threading.Lock()
+
+
+def _worker_camara(app_screen=None):
+
+    global hilo_camara_global, camara_activa_global
+
+    try:
+        bucle_camara_hilo(app_screen)
+    finally:
+        with lock_camara:
+            camara_activa_global = False
+
+            if hilo_camara_global is threading.current_thread():
+                hilo_camara_global = None
+
+        print("[CAM] Hilo terminado completamente")
+
+
+def iniciar_camara(app_screen=None):
+
+    global hilo_camara_global, camara_activa_global
+
+    with lock_camara:
+        if (
+            hilo_camara_global is not None
+            and hilo_camara_global.is_alive()
+        ):
+            print("[CAM] Ya existe un hilo de cámara activo")
+            return False
+
+        print("Iniciando cámara")
+
+        camara_activa_global = True
+
+        hilo_camara_global = threading.Thread(
+            target=_worker_camara,
+            args=(app_screen,),
+            daemon=True,
+        )
+
+        hilo_camara_global.start()
+
+        return True
+
+
+def detener_camara():
+    """
+    Solicita al hilo activo que cierre la cámara.
+    La liberación real del dispositivo ocurre dentro
+    del finally de bucle_camara_hilo().
+    """
+    global camara_activa_global
+
+    print("[CAM] Solicitando cierre")
+    camara_activa_global = False
+
 
 def bucle_camara_hilo(app_screen=None):
     # hilo camara
     global texto_overlay, color_overlay, camara_activa_global
 
     cap = None
-    # Probamos los puertos 0 y 1 asegurando el tiempo de calentamiento
-    for puerto in [0, 1]:
-        temp_cap = cv2.VideoCapture(puerto, cv2.CAP_V4L2)
-        if temp_cap.isOpened():
-            temp_cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-            temp_cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-            time.sleep(0.5)  # Da tiempo a la Logitech Brio de encender
-            
-            camara_lista = False
-            for _ in range(5):
-                ret, _ = temp_cap.read()
-                if ret:
-                    camara_lista = True
-                    break
-                time.sleep(0.1)
-                
-            if camara_lista:
-                cap = temp_cap
-                break
-            else:
-                temp_cap.release()
-
-    if cap is None:
-        print("Error camara")
-        camara_activa_global = False
-        if app_screen:
-            from kivy.clock import Clock
-
-            Clock.schedule_once(
-                lambda dt: setattr(app_screen, "camara_activa", False)
-            )
-        return
+    nombre_ventana = "Monitoreo de Reaccion IKA"
 
     try:
-        nombre_ventana = "Monitoreo de Reaccion IKA"
+        # Intentar abrir /dev/video0
+        cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
+        ret = False
+
+        if cap.isOpened():
+            # Dar varios intentos para obtener el primer frame
+            for _ in range(10):
+                ret, _ = cap.read()
+                if ret:
+                    break
+                time.sleep(0.05)
+
+        # Si video0 falla, liberar e intentar video1
+        if not cap.isOpened() or not ret:
+            if cap is not None:
+                cap.release()
+
+            cap = cv2.VideoCapture(1, cv2.CAP_V4L2)
+            ret = False
+
+            if cap.isOpened():
+                for _ in range(10):
+                    ret, _ = cap.read()
+                    if ret:
+                        break
+                    time.sleep(0.05)
+
+        # Si tampoco video1 funciona
+        if not cap.isOpened() or not ret:
+            print("Error camara")
+            return
+
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
+        time.sleep(0.5)
+
         cv2.namedWindow(nombre_ventana, cv2.WINDOW_GUI_NORMAL)
         cv2.resizeWindow(nombre_ventana, 600, 300)
-        
         cv2.moveWindow(nombre_ventana, 0, 0)
 
         while camara_activa_global:
             ret, frame = cap.read()
+
             if not ret:
                 time.sleep(0.01)
                 continue
 
             try:
-                if cv2.getWindowProperty(nombre_ventana, cv2.WND_PROP_VISIBLE) < 1:
-                    camara_activa_global = False
+                if (
+                    cv2.getWindowProperty(
+                        nombre_ventana,
+                        cv2.WND_PROP_VISIBLE
+                    )
+                    < 1
+                ):
+                    print("[CAM] Ventana cerrada con X")
                     break
+
             except Exception:
-                camara_activa_global = False
+                print("[CAM] Ventana OpenCV cerrada")
                 break
 
-            frame = cv2.resize(frame, (600, 300), interpolation=cv2.INTER_AREA)
+            frame = cv2.resize(
+                frame,
+                (600, 300),
+                interpolation=cv2.INTER_AREA
+            )
 
             if texto_overlay:
                 font_scale = 0.45
@@ -77,14 +152,21 @@ def bucle_camara_hilo(app_screen=None):
                 font = cv2.FONT_HERSHEY_SIMPLEX
 
                 (text_w, text_h), baseline = cv2.getTextSize(
-                    texto_overlay, font, font_scale, thickness
+                    texto_overlay,
+                    font,
+                    font_scale,
+                    thickness
                 )
 
                 margin = 8
+
                 cv2.rectangle(
                     frame,
                     (10, 8),
-                    (10 + text_w + (margin * 2), 10 + text_h + margin + 4),
+                    (
+                        10 + text_w + (margin * 2),
+                        10 + text_h + margin + 4
+                    ),
                     (0, 0, 0),
                     -1,
                 )
@@ -103,34 +185,48 @@ def bucle_camara_hilo(app_screen=None):
             cv2.imshow(nombre_ventana, frame)
 
             if cv2.waitKey(1) & 0xFF == ord("q"):
-                camara_activa_global = False
+                print("[CAM] Ventana cerrada con Q")
                 break
 
             time.sleep(0.005)
 
     finally:
-        # limpieza de recursos al cerrar (ya sea por clic en X, tecla 'q' o boton Kivy)
+        # Marcar primero que la cámara ya no debe seguir ejecutándose
+        camara_activa_global = False
+
+        # Liberar físicamente el dispositivo V4L2
         if cap is not None:
-            if cap.isOpened():
-                cap.release()
-            del cap  # Destruye el objeto de memoria forzando el cierre del USB
-            
+            try:
+                if cap.isOpened():
+                    cap.release()
+            except Exception as e:
+                print(f"[CAM] Error liberando cámara: {e}")
+
+        # Destruir solamente la ventana de la cámara
         try:
-            cv2.destroyAllWindows()
+            cv2.destroyWindow(nombre_ventana)
             cv2.waitKey(1)
         except Exception:
             pass
-            
-        time.sleep(0.5)  # Da tiempo fisico a Linux para liberar el puerto
-        camara_activa_global = False
 
-        # cambiar el estado del boton Cam a gris en la interfaz Kivy
+        # Cambiar el estado del botón Cam a gris en la interfaz Kivy
         if app_screen:
-            from kivy.clock import Clock
+            try:
+                from kivy.clock import Clock
 
-            Clock.schedule_once(
-                lambda dt: setattr(app_screen, "camara_activa", False)
-            )
+                Clock.schedule_once(
+                    lambda dt: setattr(
+                        app_screen,
+                        "camara_activa",
+                        False
+                    ),
+                    0,
+                )
+
+            except Exception as e:
+                print(f"[CAM] Error actualizando Kivy: {e}")
+
+        print("[CAM] Cámara liberada")
 
 
 async def leer_temperatura_placa(parrilla):

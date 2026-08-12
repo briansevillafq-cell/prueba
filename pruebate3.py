@@ -35,80 +35,84 @@ def bucle_camara_hilo(app_screen=None):
             )
         return
 
-    nombre_ventana = "Monitoreo de Reaccion IKA"
-    cv2.namedWindow(nombre_ventana, cv2.WINDOW_GUI_NORMAL)
-    cv2.resizeWindow(nombre_ventana, 600, 300)
-    
-    cv2.moveWindow(nombre_ventana, 0, 0)
+    try:
+        nombre_ventana = "Monitoreo de Reaccion IKA"
+        cv2.namedWindow(nombre_ventana, cv2.WINDOW_GUI_NORMAL)
+        cv2.resizeWindow(nombre_ventana, 600, 300)
+        
+        cv2.moveWindow(nombre_ventana, 0, 0)
 
-    while camara_activa_global:
-        ret, frame = cap.read()
-        if not ret:
-            time.sleep(0.01)
-            continue
+        while camara_activa_global:
+            ret, frame = cap.read()
+            if not ret:
+                time.sleep(0.01)
+                continue
 
-        try:
-            if cv2.getWindowProperty(nombre_ventana, cv2.WND_PROP_VISIBLE) < 1:
+            try:
+                if cv2.getWindowProperty(nombre_ventana, cv2.WND_PROP_VISIBLE) < 1:
+                    camara_activa_global = False
+                    break
+            except Exception:
                 camara_activa_global = False
                 break
+
+            frame = cv2.resize(frame, (600, 300), interpolation=cv2.INTER_AREA)
+
+            if texto_overlay:
+                font_scale = 0.45
+                thickness = 1
+                font = cv2.FONT_HERSHEY_SIMPLEX
+
+                (text_w, text_h), baseline = cv2.getTextSize(
+                    texto_overlay, font, font_scale, thickness
+                )
+
+                margin = 8
+                cv2.rectangle(
+                    frame,
+                    (10, 8),
+                    (10 + text_w + (margin * 2), 10 + text_h + margin + 4),
+                    (0, 0, 0),
+                    -1,
+                )
+
+                cv2.putText(
+                    frame,
+                    texto_overlay,
+                    (10 + margin, 10 + text_h + 2),
+                    font,
+                    font_scale,
+                    color_overlay,
+                    thickness,
+                    cv2.LINE_AA,
+                )
+
+            cv2.imshow(nombre_ventana, frame)
+
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                camara_activa_global = False
+                break
+
+            time.sleep(0.005)
+
+    finally:
+        # limpieza de recursos al cerrar (ya sea por clic en X, tecla 'q' o boton Kivy)
+        if cap is not None and cap.isOpened():
+            cap.release()
+        try:
+            cv2.destroyAllWindows()
+            cv2.waitKey(1)
         except Exception:
-            camara_activa_global = False
-            break
+            pass
+        camara_activa_global = False
 
-        frame = cv2.resize(frame, (600, 300), interpolation=cv2.INTER_AREA)
+        # cambiar el estado del boton Cam a gris en la interfaz Kivy
+        if app_screen:
+            from kivy.clock import Clock
 
-        if texto_overlay:
-            font_scale = 0.45
-            thickness = 1
-            font = cv2.FONT_HERSHEY_SIMPLEX
-
-            (text_w, text_h), baseline = cv2.getTextSize(
-                texto_overlay, font, font_scale, thickness
+            Clock.schedule_once(
+                lambda dt: setattr(app_screen, "camara_activa", False)
             )
-
-            margin = 8
-            cv2.rectangle(
-                frame,
-                (10, 8),
-                (10 + text_w + (margin * 2), 10 + text_h + margin + 4),
-                (0, 0, 0),
-                -1,
-            )
-
-            cv2.putText(
-                frame,
-                texto_overlay,
-                (10 + margin, 10 + text_h + 2),
-                font,
-                font_scale,
-                color_overlay,
-                thickness,
-                cv2.LINE_AA,
-            )
-
-        cv2.imshow(nombre_ventana, frame)
-
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            camara_activa_global = False
-            break
-
-        time.sleep(0.005)
-
-    # limpieza de recursos al cerrar (ya sea por clic en X, tecla 'q' o boton Kivy)
-    cap.release()
-    cv2.destroyAllWindows()
-    cv2.waitKey(1)
-    del cap
-    time.sleep(0.5)
-    camara_activa_global = False
-
-    # cambiar el estado del boton Cam a gris en la interfaz Kivy
-    if app_screen:
-        from kivy.clock import Clock
-
-        Clock.schedule_once(
-            lambda dt: setattr(app_screen, "camara_activa", False)
-        )
 
 
 async def leer_temperatura_placa(parrilla):

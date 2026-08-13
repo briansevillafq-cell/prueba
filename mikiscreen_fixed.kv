@@ -21,12 +21,6 @@
                 size: self.size
 
     FloatLayout:
-        canvas.before:
-            Color:
-                rgba: 1, 1, 1, 1
-            Rectangle:
-                pos: self.pos
-                size: self.size
 
         FloatLayout:
             id: layout
@@ -35,8 +29,9 @@
                 text: "Pump Control Panel"
                 size_hint: None, None
                 size: self.texture_size
-                pos: 30, 660
+                pos: 30, 615
                 font_size: 22
+                color: 0, 0, 0, 1
 
             TextInput:
                 id: vol0
@@ -129,6 +124,7 @@
                 pos: 1020, 133
 
             Button:
+                id: resetButton
                 text: "RESET"
                 size_hint: None, None
                 size: 90, 42
@@ -145,12 +141,9 @@
                 pos: 200, 25
                 font_size: 13
                 bold: True
-
                 background_normal: ""
-                background_color: (0.2, 0.6, 0.3, 0.75)
-
+                background_color: 0.2, 0.6, 0.3, 0.75
                 on_state: root.set_moodWork(self)
-
 
             ToggleButton:
                 id: parallel
@@ -161,12 +154,9 @@
                 pos: 300, 25
                 font_size: 13
                 bold: True
-
                 background_normal: ""
-                background_color: (0.2, 0.6, 0.3, 0.75)
-
+                background_color: 0.2, 0.6, 0.3, 0.75
                 on_state: root.set_moodWork(self)
-
 
             BoxLayout:
                 orientation: "horizontal"
@@ -190,12 +180,8 @@
                         group: "options"
                         active: True
                         size_hint_y: 0.6
-
                         color: (0.5, 0.5, 0.5, 1) if not self.active else (1, 1, 1, 1)
-
-                        on_active:
-                            if self.active: root.set_stirringStage(0, True)
-
+                        on_active: if self.active: root.set_stirringStage(0, True)
 
                 BoxLayout:
                     orientation: "vertical"
@@ -211,77 +197,54 @@
                         id: checkyes
                         group: "options"
                         size_hint_y: 0.6
-
                         color: (0.5, 0.5, 0.5, 1) if not self.active else (0.2, 0.6, 1, 1)
-
-                        on_active:
-                            if self.active: root.set_stirringStage(1, True)
-
+                        on_active: if self.active: root.set_stirringStage(1, True)
 
             TextInput:
                 id: temp_input
                 text: "0"
                 multiline: False
-
                 size_hint: None, None
                 size: 70, 32
                 pos: 535, 30
-
                 disabled: not checkyes.active
-
 
             TextInput:
                 id: rpm_input
                 text: "0"
                 multiline: False
-
                 size_hint: None, None
                 size: 70, 32
                 pos: 620, 30
-
                 disabled: not checkyes.active
-
 
             TextInput:
                 id: stir_time
                 text: "0"
                 multiline: False
-
                 size_hint: None, None
                 size: 70, 32
                 pos: 705, 30
-
                 disabled: not checkyes.active
 
             Button:
                 id: camButton
                 text: "LIVE"
-
                 size_hint: None, None
                 size: 90, 42
                 pos: 805, 25
-
                 font_size: 17
                 bold: True
-
                 background_normal: ""
-
-                background_color:
-                    (0.85, 0.08, 0.08, 1) if root.camara_activa else (0.5, 0.5, 0.5, 1)
-
+                background_color: (0.85, 0.08, 0.08, 1) if root.camara_activa else (0.5, 0.5, 0.5, 1)
                 color: 1, 1, 1, 1
-
                 on_press: root.toggle_camera()
-
 
             Button:
                 id: srtButton
                 text: "START"
-
                 size_hint: None, None
                 size: 130, 48
                 pos: 925, 22
-
                 font_size: 22
-
                 on_press: root.chyorn()

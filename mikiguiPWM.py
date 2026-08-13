@@ -1,3 +1,9 @@
+from kivy.config import Config
+
+Config.set("graphics", "width", "1135")
+Config.set("graphics", "height", "665")
+Config.set("graphics", "resizable", "0")
+
 import asyncio
 import threading
 import time
@@ -15,12 +21,11 @@ from kivy.uix.button import Button
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.label import Label
 from kivy.uix.popup import Popup
-from kivy.uix.textinput import TextInput
-from kivy.uix.togglebutton import ToggleButton
 
 Window.size = (1135, 665)
 Window.resizable = False
 Window.title = "MIK-I"
+
 
 class MikiScreen(FloatLayout):
 
@@ -33,21 +38,13 @@ class MikiScreen(FloatLayout):
         self.stir_stage = None
         self.used_pines = {}
         self.usb_port = "/dev/ttyUSB0"
-
-        # Evita que un mismo clic/evento de LIVE se procese dos veces
         self._ultimo_toggle_camara = 0.0
-
-        # Mantiene el color del boton LIVE sincronizado con
-        # el estado real de la camara en pruebate3.py
         Clock.schedule_interval(self.sync_camera_state, 0.25)
 
     def sync_camera_state(self, dt):
         self.camara_activa = bool(pruebate3.camara_activa_global)
 
     def toggle_camera(self):
-        # --------------------------------------------------
-        # Evitar doble ejecución del mismo clic/evento
-        # --------------------------------------------------
         ahora = time.monotonic()
 
         if ahora - self._ultimo_toggle_camara < 0.8:
@@ -56,18 +53,12 @@ class MikiScreen(FloatLayout):
 
         self._ultimo_toggle_camara = ahora
 
-        # --------------------------------------------------
-        # Si la cámara está encendida -> apagar
-        # --------------------------------------------------
         if pruebate3.camara_activa_global:
             print("[CAM UI] Apagando cámara")
             pruebate3.detener_camara()
             self.camara_activa = False
             return
 
-        # --------------------------------------------------
-        # Si la cámara está apagada -> encender
-        # --------------------------------------------------
         print("[CAM UI] Encendiendo cámara")
 
         pruebate3.texto_overlay = "EN ESPERA"
@@ -79,18 +70,11 @@ class MikiScreen(FloatLayout):
             self.camara_activa = True
 
     def stirring(self, temp, rpm, time_wait, time_min):
-        """Ejecuta IKA desde pruebate3.py."""
-
-        # Iniciar cámara solamente si realmente no existe
-        # ningún hilo de cámara funcionando o cerrándose.
         hilo_cam = pruebate3.hilo_camara_global
 
         if (
             not pruebate3.camara_activa_global
-            and (
-                hilo_cam is None
-                or not hilo_cam.is_alive()
-            )
+            and (hilo_cam is None or not hilo_cam.is_alive())
         ):
             pruebate3.iniciar_camara(self)
 
@@ -119,6 +103,7 @@ class MikiScreen(FloatLayout):
                 Ellipse(pos=(260 + 220 * i, 432), size=(148, 148))
                 Color(3, 0.55, 8, 0.63)
                 Ellipse(pos=(326 + 221 * i, 499), size=(13, 13))
+
             self.add_widget(
                 Label(
                     text=f"Pump {i + 1}",
@@ -129,6 +114,7 @@ class MikiScreen(FloatLayout):
                     font_size=20,
                 )
             )
+
             self.add_widget(
                 Label(
                     text="Vol (ml): ",
@@ -141,8 +127,10 @@ class MikiScreen(FloatLayout):
             )
 
         for j in range(5):
-            x = 110 + 203 * j
+            x = 63 + 203 * j
             y = 170
+            center_x = x + 99
+
             with self.canvas:
                 Color(0, 0, 0, 1)
                 Ellipse(pos=(x + 24, y + 5), size=(150, 152))
@@ -150,22 +138,24 @@ class MikiScreen(FloatLayout):
                 Ellipse(pos=(x + 25, y + 7), size=(148, 148))
                 Color(3, 0.55, 8, 0.63)
                 Ellipse(pos=(x + 92, y + 73), size=(13, 13))
+
             self.add_widget(
                 Label(
                     text=f"Pump {j + 5}",
                     size_hint=(None, None),
-                    size=(90, 30),
-                    pos=(152 + 206 * j, 332),
+                    size=(110, 30),
+                    pos=(center_x - 55, 332),
                     color=(0, 0, 0, 1),
                     font_size=20,
                 )
             )
+
             self.add_widget(
                 Label(
                     text="Vol (ml): ",
                     size_hint=(None, None),
-                    size=(30, 30),
-                    pos=(155 + 204 * j, 133),
+                    size=(95, 30),
+                    pos=(center_x - 92, 133),
                     color=(0, 0, 0, 1),
                     font_size=18,
                 )
@@ -180,20 +170,15 @@ class MikiScreen(FloatLayout):
             Ellipse(pos=(119, 499), size=(13, 13))
 
         labels = [
-            ("Service Pump", (150, 30), (45, 585), 20),
-            ("Vol (ml): ", (100, 30), (25, 400), 18),
-
-            # Addition centrado exactamente sobre In-Order y Parallel
-            # Los botones en el .kv ocupan x=200..390; centro = 295 px
-            ("Addition", (190, 26), (200, 76), 18),
-
-            # Heat/Stir centrado sobre temp, rpm y time
-            # Los campos del .kv ocupan x=535..775; centro = 655 px
-            ("Heat/Stir", (240, 26), (535, 96), 18),
-            ("temp (°C)", (70, 24), (535, 65), 14),
-            ("rpm", (70, 24), (620, 65), 14),
-            ("time (min)", (70, 24), (705, 65), 14),
+            ("Service Pump", (170, 30), (35, 585), 20),
+            ("Vol (ml): ", (100, 30), (30, 386), 18),
+            ("Addition", (200, 28), (220, 76), 18),
+            ("Heat/Stir", (245, 28), (560, 95), 18),
+            ("temp (°C)", (75, 24), (560, 65), 14),
+            ("rpm", (75, 24), (645, 65), 14),
+            ("time (min)", (75, 24), (730, 65), 14),
         ]
+
         for text, size, pos, fsize in labels:
             self.add_widget(
                 Label(
@@ -222,9 +207,12 @@ class MikiScreen(FloatLayout):
             self.ids.inorder,
         ]:
             n.state = "normal"
+
         self.selection_mood = ""
+
         for i in range(10):
             self.ids[f"vol{i}"].text = "0"
+
         self.ids.temp_input.text = "0"
         self.ids.rpm_input.text = "0"
         self.ids.stir_time.text = "0"
@@ -439,14 +427,19 @@ class MikiScreen(FloatLayout):
                     self.reaction_finished()
 
         confirm_popup = Popup(
-            title="CONFIRM", size_hint=(None, None), size=(300, 200)
+            title="CONFIRM",
+            size_hint=(None, None),
+            size=(300, 200),
         )
+
         content = BoxLayout(orientation="vertical")
         content.add_widget(
             Label(
-                text="Do you want to start the reaction?", font_size=18
+                text="Do you want to start the reaction?",
+                font_size=18,
             )
         )
+
         buttons = BoxLayout(size_hint_y=0.4)
         yes_btn = Button(text="YES")
         no_btn = Button(text="NO")
@@ -479,7 +472,8 @@ class MikiScreen(FloatLayout):
             Popup(
                 title="Error",
                 content=Label(
-                    text="Only numbers allowed in volumes!", font_size=18
+                    text="Only numbers allowed in volumes!",
+                    font_size=18,
                 ),
                 size_hint=(None, None),
                 size=(300, 150),
@@ -487,21 +481,27 @@ class MikiScreen(FloatLayout):
             return
 
         confirm_popup = Popup(
-            title="CONFIRM", size_hint=(None, None), size=(300, 200)
+            title="CONFIRM",
+            size_hint=(None, None),
+            size=(300, 200),
         )
+
         content = BoxLayout(orientation="vertical")
         content.add_widget(
             Label(text="Consider the load time?", font_size=18)
         )
+
         buttons = BoxLayout(size_hint_y=0.4)
         yes_btn = Button(text="YES")
         no_btn = Button(text="NO")
+
         yes_btn.bind(
             on_press=lambda x: [confirm_popup.dismiss(), self.rxnY()]
         )
         no_btn.bind(
             on_press=lambda x: [confirm_popup.dismiss(), self.rxnN()]
         )
+
         buttons.add_widget(yes_btn)
         buttons.add_widget(no_btn)
         content.add_widget(buttons)

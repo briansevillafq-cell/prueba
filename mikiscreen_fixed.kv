@@ -1,7 +1,7 @@
 <MikiScreen>:
     canvas.before:
         Color:
-            rgba: 1, 1, 1, 1  
+            rgba: 1, 1, 1, 1
         Rectangle:
             pos: self.pos
             size: self.size
@@ -12,6 +12,7 @@
         size: 1150, 40
         pos: 0, 620
         color: 0, 0, 0, 1
+
         canvas.before:
             Color:
                 rgba: 0.5, 0.5, 0.5, 1
@@ -20,7 +21,6 @@
                 size: self.size
 
     FloatLayout:
-        orientation: 'vertical'
         canvas.before:
             Color:
                 rgba: 1, 1, 1, 1
@@ -38,8 +38,6 @@
                 pos: 30, 660
                 font_size: 22
 
-            # Inputs de bombas (0 a 9)
-
             TextInput:
                 id: vol0
                 text: "0"
@@ -47,7 +45,7 @@
                 multiline: False
                 size_hint: None, None
                 size: 80, 30
-                pos_hint: {"x": 0.10, "y": 0.58}
+                pos: 113, 386
 
             TextInput:
                 id: vol1
@@ -56,7 +54,7 @@
                 multiline: False
                 size_hint: None, None
                 size: 80, 30
-                pos_hint: {"x": 0.285, "y": 0.58}
+                pos: 323, 386
 
             TextInput:
                 id: vol2
@@ -65,7 +63,7 @@
                 multiline: False
                 size_hint: None, None
                 size: 80, 30
-                pos_hint: {"x": 0.485, "y": 0.58}
+                pos: 550, 386
 
             TextInput:
                 id: vol3
@@ -74,7 +72,7 @@
                 multiline: False
                 size_hint: None, None
                 size: 80, 30
-                pos_hint: {"x": 0.683, "y": 0.58}
+                pos: 775, 386
 
             TextInput:
                 id: vol4
@@ -83,7 +81,7 @@
                 multiline: False
                 size_hint: None, None
                 size: 80, 30
-                pos_hint: {"x": 0.88, "y": 0.58}
+                pos: 998, 386
 
             TextInput:
                 id: vol5
@@ -92,7 +90,7 @@
                 multiline: False
                 size_hint: None, None
                 size: 80, 30
-                pos_hint: {"x": 0.18, "y": 0.2}
+                pos: 204, 133
 
             TextInput:
                 id: vol6
@@ -101,7 +99,7 @@
                 multiline: False
                 size_hint: None, None
                 size: 80, 30
-                pos_hint: {"x": 0.359, "y": 0.2}
+                pos: 407, 133
 
             TextInput:
                 id: vol7
@@ -110,7 +108,7 @@
                 multiline: False
                 size_hint: None, None
                 size: 80, 30
-                pos_hint: {"x": 0.54, "y": 0.2}
+                pos: 613, 133
 
             TextInput:
                 id: vol8
@@ -119,7 +117,7 @@
                 multiline: False
                 size_hint: None, None
                 size: 80, 30
-                pos_hint: {"x": 0.72, "y": 0.2}
+                pos: 817, 133
 
             TextInput:
                 id: vol9
@@ -128,133 +126,162 @@
                 multiline: False
                 size_hint: None, None
                 size: 80, 30
-                pos_hint: {"x": 0.90, "y": 0.2}
+                pos: 1020, 133
 
-            # =========================================================
-            # BARRA DE CONTROL INFERIOR PERFECTAMENTE ALINEADA
-            # =========================================================
-
-            # Botón RESET
             Button:
                 text: "RESET"
                 size_hint: None, None
-                size: 80, 38
+                size: 90, 42
+                pos: 80, 25
                 font_size: 16
-                pos_hint: {"x": 0.04, "y": 0.035}
                 on_press: root.clr_text()
 
-            # ToggleButtons de Modo (In-Order / Parallel)
             ToggleButton:
                 id: inorder
                 text: "In-Order"
                 group: "modo"
                 size_hint: None, None
-                size: 70, 35
-                pos: 160, 25
-                font_size: 12
+                size: 90, 42
+                pos: 200, 25
+                font_size: 13
                 bold: True
+
                 background_normal: ""
                 background_color: (0.2, 0.6, 0.3, 0.75)
+
                 on_state: root.set_moodWork(self)
+
 
             ToggleButton:
                 id: parallel
                 text: "Parallel"
                 group: "modo"
                 size_hint: None, None
-                size: 70, 35
-                pos: 235, 25
-                font_size: 12
+                size: 90, 42
+                pos: 300, 25
+                font_size: 13
                 bold: True
+
                 background_normal: ""
                 background_color: (0.2, 0.6, 0.3, 0.75)
+
                 on_state: root.set_moodWork(self)
 
-            # CheckBox (No / Yes)
+
             BoxLayout:
-                orientation: 'horizontal'
+                orientation: "horizontal"
                 size_hint: None, None
                 size: 90, 48
-                pos_hint: {"x": 0.31, "y": 0.03}
+                pos: 420, 22
                 spacing: 2
 
                 BoxLayout:
-                    orientation: 'vertical'
+                    orientation: "vertical"
                     spacing: 1
+
                     Label:
                         text: "No"
                         color: 0, 0, 0, 1
                         size_hint_y: 0.4
                         font_size: 12
+
                     CheckBox:
                         id: checkno
                         group: "options"
                         active: True
                         size_hint_y: 0.6
+
                         color: (0.5, 0.5, 0.5, 1) if not self.active else (1, 1, 1, 1)
-                        on_active: if self.active: root.set_stirringStage(0, True)
+
+                        on_active:
+                            if self.active: root.set_stirringStage(0, True)
+
 
                 BoxLayout:
-                    orientation: 'vertical'
+                    orientation: "vertical"
                     spacing: 1
+
                     Label:
                         text: "Yes"
                         color: 0, 0, 0, 1
                         size_hint_y: 0.4
                         font_size: 12
+
                     CheckBox:
                         id: checkyes
                         group: "options"
                         size_hint_y: 0.6
-                        color: (0.5, 0.5, 0.5, 1) if not self.active else (0.2, 0.6, 1, 1)
-                        on_active: if self.active: root.set_stirringStage(1, True)
 
-            # Entradas de Temperatura, RPM y Tiempo alineadas bajo sus títulos
+                        color: (0.5, 0.5, 0.5, 1) if not self.active else (0.2, 0.6, 1, 1)
+
+                        on_active:
+                            if self.active: root.set_stirringStage(1, True)
+
+
             TextInput:
                 id: temp_input
                 text: "0"
                 multiline: False
+
                 size_hint: None, None
-                size: 65, 30
-                pos_hint: {"x": 0.435, "y": 0.04}
+                size: 70, 32
+                pos: 535, 30
+
                 disabled: not checkyes.active
+
 
             TextInput:
                 id: rpm_input
                 text: "0"
                 multiline: False
+
                 size_hint: None, None
-                size: 65, 30
-                pos_hint: {"x": 0.51, "y": 0.04}
+                size: 70, 32
+                pos: 620, 30
+
                 disabled: not checkyes.active
+
 
             TextInput:
                 id: stir_time
                 text: "0"
                 multiline: False
+
                 size_hint: None, None
-                size: 65, 30
-                pos_hint: {"x": 0.585, "y": 0.04}
+                size: 70, 32
+                pos: 705, 30
+
                 disabled: not checkyes.active
 
-            # Botón Cam (Gris / Verde)
             Button:
-                text: "Cam"
                 id: camButton
+                text: "LIVE"
+
                 size_hint: None, None
-                size: 70, 42
+                size: 90, 42
+                pos: 805, 25
+
                 font_size: 17
-                pos_hint: {"x": 0.67, "y": 0.03}
+                bold: True
+
                 background_normal: ""
-                background_color: (0.2, 0.7, 0.3, 1) if root.camara_activa else (0.5, 0.5, 0.5, 1)
+
+                background_color:
+                    (0.85, 0.08, 0.08, 1) if root.camara_activa else (0.5, 0.5, 0.5, 1)
+
+                color: 1, 1, 1, 1
+
                 on_press: root.toggle_camera()
 
-            # Botón START
+
             Button:
-                text: "START"
                 id: srtButton
+                text: "START"
+
                 size_hint: None, None
-                size: 125, 48
+                size: 130, 48
+                pos: 925, 22
+
                 font_size: 22
-                pos_hint: {"x": 0.76, "y": 0.03}
+
                 on_press: root.chyorn()

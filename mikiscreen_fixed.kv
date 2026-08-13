@@ -9,242 +9,232 @@
     Label:
         text: "MIK-I"
         size_hint: None, None
-        size: 1150, 40
-        pos: 0, 620
+        size: 1135, 40
+        pos: 0, 625
         color: 0, 0, 0, 1
 
         canvas.before:
             Color:
-                rgba: 0.5, 0.5, 0.5, 1
+                rgba: 0.74, 0.74, 0.74, 1
             Rectangle:
                 pos: self.pos
                 size: self.size
 
     FloatLayout:
+        id: layout
 
-        FloatLayout:
-            id: layout
+        TextInput:
+            id: vol0
+            text: "0"
+            on_focus: if self.focus: self.text = ""
+            multiline: False
+            size_hint: None, None
+            size: 80, 30
+            pos: 113, 386
 
-            Label:
-                text: "Pump Control Panel"
-                size_hint: None, None
-                size: self.texture_size
-                pos: 30, 615
-                font_size: 22
-                color: 0, 0, 0, 1
+        TextInput:
+            id: vol1
+            text: "0"
+            on_focus: if self.focus: self.text = ""
+            multiline: False
+            size_hint: None, None
+            size: 80, 30
+            pos: 323, 386
 
-            TextInput:
-                id: vol0
-                text: "0"
-                on_focus: if self.focus: self.text = ""
-                multiline: False
-                size_hint: None, None
-                size: 80, 30
-                pos: 113, 386
+        TextInput:
+            id: vol2
+            text: "0"
+            on_focus: if self.focus: self.text = ""
+            multiline: False
+            size_hint: None, None
+            size: 80, 30
+            pos: 550, 386
 
-            TextInput:
-                id: vol1
-                text: "0"
-                on_focus: if self.focus: self.text = ""
-                multiline: False
-                size_hint: None, None
-                size: 80, 30
-                pos: 323, 386
+        TextInput:
+            id: vol3
+            text: "0"
+            on_focus: if self.focus: self.text = ""
+            multiline: False
+            size_hint: None, None
+            size: 80, 30
+            pos: 775, 386
 
-            TextInput:
-                id: vol2
-                text: "0"
-                on_focus: if self.focus: self.text = ""
-                multiline: False
-                size_hint: None, None
-                size: 80, 30
-                pos: 550, 386
+        TextInput:
+            id: vol4
+            text: "0"
+            on_focus: if self.focus: self.text = ""
+            multiline: False
+            size_hint: None, None
+            size: 80, 30
+            pos: 998, 386
 
-            TextInput:
-                id: vol3
-                text: "0"
-                on_focus: if self.focus: self.text = ""
-                multiline: False
-                size_hint: None, None
-                size: 80, 30
-                pos: 775, 386
+        TextInput:
+            id: vol5
+            text: "0"
+            on_focus: if self.focus: self.text = ""
+            multiline: False
+            size_hint: None, None
+            size: 80, 30
+            pos: 172, 133
 
-            TextInput:
-                id: vol4
-                text: "0"
-                on_focus: if self.focus: self.text = ""
-                multiline: False
-                size_hint: None, None
-                size: 80, 30
-                pos: 998, 386
+        TextInput:
+            id: vol6
+            text: "0"
+            on_focus: if self.focus: self.text = ""
+            multiline: False
+            size_hint: None, None
+            size: 80, 30
+            pos: 375, 133
 
-            TextInput:
-                id: vol5
-                text: "0"
-                on_focus: if self.focus: self.text = ""
-                multiline: False
-                size_hint: None, None
-                size: 80, 30
-                pos: 204, 133
+        TextInput:
+            id: vol7
+            text: "0"
+            on_focus: if self.focus: self.text = ""
+            multiline: False
+            size_hint: None, None
+            size: 80, 30
+            pos: 578, 133
 
-            TextInput:
-                id: vol6
-                text: "0"
-                on_focus: if self.focus: self.text = ""
-                multiline: False
-                size_hint: None, None
-                size: 80, 30
-                pos: 407, 133
+        TextInput:
+            id: vol8
+            text: "0"
+            on_focus: if self.focus: self.text = ""
+            multiline: False
+            size_hint: None, None
+            size: 80, 30
+            pos: 781, 133
 
-            TextInput:
-                id: vol7
-                text: "0"
-                on_focus: if self.focus: self.text = ""
-                multiline: False
-                size_hint: None, None
-                size: 80, 30
-                pos: 613, 133
+        TextInput:
+            id: vol9
+            text: "0"
+            on_focus: if self.focus: self.text = ""
+            multiline: False
+            size_hint: None, None
+            size: 80, 30
+            pos: 984, 133
 
-            TextInput:
-                id: vol8
-                text: "0"
-                on_focus: if self.focus: self.text = ""
-                multiline: False
-                size_hint: None, None
-                size: 80, 30
-                pos: 817, 133
+        Button:
+            id: resetButton
+            text: "RESET"
+            size_hint: None, None
+            size: 95, 42
+            pos: 90, 18
+            font_size: 16
+            on_press: root.clr_text()
 
-            TextInput:
-                id: vol9
-                text: "0"
-                on_focus: if self.focus: self.text = ""
-                multiline: False
-                size_hint: None, None
-                size: 80, 30
-                pos: 1020, 133
+        ToggleButton:
+            id: inorder
+            text: "In-Order"
+            group: "modo"
+            size_hint: None, None
+            size: 95, 42
+            pos: 220, 18
+            font_size: 13
+            bold: True
+            background_normal: ""
+            background_color: 0.2, 0.6, 0.3, 0.75
+            on_state: root.set_moodWork(self)
 
-            Button:
-                id: resetButton
-                text: "RESET"
-                size_hint: None, None
-                size: 90, 42
-                pos: 80, 25
-                font_size: 16
-                on_press: root.clr_text()
+        ToggleButton:
+            id: parallel
+            text: "Parallel"
+            group: "modo"
+            size_hint: None, None
+            size: 95, 42
+            pos: 325, 18
+            font_size: 13
+            bold: True
+            background_normal: ""
+            background_color: 0.2, 0.6, 0.3, 0.75
+            on_state: root.set_moodWork(self)
 
-            ToggleButton:
-                id: inorder
-                text: "In-Order"
-                group: "modo"
-                size_hint: None, None
-                size: 90, 42
-                pos: 200, 25
-                font_size: 13
-                bold: True
-                background_normal: ""
-                background_color: 0.2, 0.6, 0.3, 0.75
-                on_state: root.set_moodWork(self)
-
-            ToggleButton:
-                id: parallel
-                text: "Parallel"
-                group: "modo"
-                size_hint: None, None
-                size: 90, 42
-                pos: 300, 25
-                font_size: 13
-                bold: True
-                background_normal: ""
-                background_color: 0.2, 0.6, 0.3, 0.75
-                on_state: root.set_moodWork(self)
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint: None, None
+            size: 90, 48
+            pos: 450, 13
+            spacing: 2
 
             BoxLayout:
-                orientation: "horizontal"
-                size_hint: None, None
-                size: 90, 48
-                pos: 420, 22
-                spacing: 2
+                orientation: "vertical"
+                spacing: 1
 
-                BoxLayout:
-                    orientation: "vertical"
-                    spacing: 1
+                Label:
+                    text: "No"
+                    color: 0, 0, 0, 1
+                    size_hint_y: 0.4
+                    font_size: 12
 
-                    Label:
-                        text: "No"
-                        color: 0, 0, 0, 1
-                        size_hint_y: 0.4
-                        font_size: 12
+                CheckBox:
+                    id: checkno
+                    group: "options"
+                    active: True
+                    size_hint_y: 0.6
+                    color: (0.5, 0.5, 0.5, 1) if not self.active else (1, 1, 1, 1)
+                    on_active: if self.active: root.set_stirringStage(0, True)
 
-                    CheckBox:
-                        id: checkno
-                        group: "options"
-                        active: True
-                        size_hint_y: 0.6
-                        color: (0.5, 0.5, 0.5, 1) if not self.active else (1, 1, 1, 1)
-                        on_active: if self.active: root.set_stirringStage(0, True)
+            BoxLayout:
+                orientation: "vertical"
+                spacing: 1
 
-                BoxLayout:
-                    orientation: "vertical"
-                    spacing: 1
+                Label:
+                    text: "Yes"
+                    color: 0, 0, 0, 1
+                    size_hint_y: 0.4
+                    font_size: 12
 
-                    Label:
-                        text: "Yes"
-                        color: 0, 0, 0, 1
-                        size_hint_y: 0.4
-                        font_size: 12
+                CheckBox:
+                    id: checkyes
+                    group: "options"
+                    size_hint_y: 0.6
+                    color: (0.5, 0.5, 0.5, 1) if not self.active else (0.2, 0.6, 1, 1)
+                    on_active: if self.active: root.set_stirringStage(1, True)
 
-                    CheckBox:
-                        id: checkyes
-                        group: "options"
-                        size_hint_y: 0.6
-                        color: (0.5, 0.5, 0.5, 1) if not self.active else (0.2, 0.6, 1, 1)
-                        on_active: if self.active: root.set_stirringStage(1, True)
+        TextInput:
+            id: temp_input
+            text: "0"
+            multiline: False
+            size_hint: None, None
+            size: 75, 32
+            pos: 560, 23
+            disabled: not checkyes.active
 
-            TextInput:
-                id: temp_input
-                text: "0"
-                multiline: False
-                size_hint: None, None
-                size: 70, 32
-                pos: 535, 30
-                disabled: not checkyes.active
+        TextInput:
+            id: rpm_input
+            text: "0"
+            multiline: False
+            size_hint: None, None
+            size: 75, 32
+            pos: 645, 23
+            disabled: not checkyes.active
 
-            TextInput:
-                id: rpm_input
-                text: "0"
-                multiline: False
-                size_hint: None, None
-                size: 70, 32
-                pos: 620, 30
-                disabled: not checkyes.active
+        TextInput:
+            id: stir_time
+            text: "0"
+            multiline: False
+            size_hint: None, None
+            size: 75, 32
+            pos: 730, 23
+            disabled: not checkyes.active
 
-            TextInput:
-                id: stir_time
-                text: "0"
-                multiline: False
-                size_hint: None, None
-                size: 70, 32
-                pos: 705, 30
-                disabled: not checkyes.active
+        Button:
+            id: camButton
+            text: "LIVE"
+            size_hint: None, None
+            size: 95, 42
+            pos: 840, 18
+            font_size: 17
+            bold: True
+            background_normal: ""
+            background_color: (0.85, 0.08, 0.08, 1) if root.camara_activa else (0.5, 0.5, 0.5, 1)
+            color: 1, 1, 1, 1
+            on_press: root.toggle_camera()
 
-            Button:
-                id: camButton
-                text: "LIVE"
-                size_hint: None, None
-                size: 90, 42
-                pos: 805, 25
-                font_size: 17
-                bold: True
-                background_normal: ""
-                background_color: (0.85, 0.08, 0.08, 1) if root.camara_activa else (0.5, 0.5, 0.5, 1)
-                color: 1, 1, 1, 1
-                on_press: root.toggle_camera()
-
-            Button:
-                id: srtButton
-                text: "START"
-                size_hint: None, None
-                size: 130, 48
-                pos: 925, 22
-                font_size: 22
-                on_press: root.chyorn()
+        Button:
+            id: srtButton
+            text: "START"
+            size_hint: None, None
+            size: 95, 42
+            pos: 950, 18
+            font_size: 20
+            on_press: root.chyorn()

@@ -34,15 +34,20 @@ class MikiScreen(FloatLayout):
         self.used_pines = {}
         self.usb_port = "/dev/ttyUSB0"
 
+        # Evita que un mismo clic/evento de LIVE se procese dos veces
         self._ultimo_toggle_camara = 0.0
 
+        # Mantiene el color del boton LIVE sincronizado con
+        # el estado real de la camara en pruebate3.py
         Clock.schedule_interval(self.sync_camera_state, 0.25)
 
     def sync_camera_state(self, dt):
         self.camara_activa = bool(pruebate3.camara_activa_global)
 
     def toggle_camera(self):
-
+        # --------------------------------------------------
+        # Evitar doble ejecución del mismo clic/evento
+        # --------------------------------------------------
         ahora = time.monotonic()
 
         if ahora - self._ultimo_toggle_camara < 0.8:
@@ -51,13 +56,19 @@ class MikiScreen(FloatLayout):
 
         self._ultimo_toggle_camara = ahora
 
+        # --------------------------------------------------
+        # Si la cámara está encendida -> apagar
+        # --------------------------------------------------
         if pruebate3.camara_activa_global:
             print("[CAM UI] Apagando cámara")
             pruebate3.detener_camara()
             self.camara_activa = False
             return
 
-        print("Encendiendo cámara")
+        # --------------------------------------------------
+        # Si la cámara está apagada -> encender
+        # --------------------------------------------------
+        print("[CAM UI] Encendiendo cámara")
 
         pruebate3.texto_overlay = "EN ESPERA"
         pruebate3.color_overlay = (0, 255, 0)
@@ -68,7 +79,10 @@ class MikiScreen(FloatLayout):
             self.camara_activa = True
 
     def stirring(self, temp, rpm, time_wait, time_min):
+        """Ejecuta IKA desde pruebate3.py."""
 
+        # Iniciar cámara solamente si realmente no existe
+        # ningún hilo de cámara funcionando o cerrándose.
         hilo_cam = pruebate3.hilo_camara_global
 
         if (
@@ -169,9 +183,12 @@ class MikiScreen(FloatLayout):
             ("Service Pump", (150, 30), (45, 585), 20),
             ("Vol (ml): ", (100, 30), (25, 400), 18),
 
+            # Addition centrado exactamente sobre In-Order y Parallel
+            # Los botones en el .kv ocupan x=200..390; centro = 295 px
             ("Addition", (190, 26), (200, 76), 18),
 
-
+            # Heat/Stir centrado sobre temp, rpm y time
+            # Los campos del .kv ocupan x=535..775; centro = 655 px
             ("Heat/Stir", (240, 26), (535, 96), 18),
             ("temp (°C)", (70, 24), (535, 65), 14),
             ("rpm", (70, 24), (620, 65), 14),

@@ -54,12 +54,12 @@ class MikiScreen(FloatLayout):
         self._ultimo_toggle_camara = ahora
 
         if pruebate3.camara_activa_global:
-            print("[CAM UI] Apagando cámara")
+            print("[CAM UI] Apagando cÃ¡mara")
             pruebate3.detener_camara()
             self.camara_activa = False
             return
 
-        print("[CAM UI] Encendiendo cámara")
+        print("Encendiendo cÃ¡mara")
 
         pruebate3.texto_overlay = "EN ESPERA"
         pruebate3.color_overlay = (0, 255, 0)
@@ -173,10 +173,10 @@ class MikiScreen(FloatLayout):
             ("Service Pump", (170, 30), (35, 585), 20),
             ("Vol (ml): ", (100, 30), (30, 386), 18),
             ("Addition", (200, 28), (220, 76), 18),
-            ("Heat/Stir", (245, 28), (560, 95), 18),
-            ("temp (°C)", (75, 24), (560, 65), 14),
-            ("rpm", (75, 24), (645, 65), 14),
-            ("time (min)", (75, 24), (730, 65), 14),
+            ("Heat/Stir", (245, 28), (560, 76), 18),
+            ("temp (Â°C)", (80, 24), (560, 52), 14),
+            ("rpm", (80, 24), (645, 52), 14),
+            ("time (min)", (80, 24), (730, 52), 14),
         ]
 
         for text, size, pos, fsize in labels:

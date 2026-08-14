@@ -17,7 +17,7 @@ if start in ("si"):
             sleep(2)
 
         print("Las bombas están encendidas")
-        input("Presiona ENTER para apagar las bombas")
+        input("Presiona ENTER para apagar")
 
     except KeyboardInterrupt:
         print("\nProceso detenido")
